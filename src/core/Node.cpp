@@ -1,21 +1,17 @@
 #include "Node.hpp"
 #include "Interface.hpp"
-#include "Packet.hpp"
 
 #include <iostream>
+#include <iomanip>
 #include <stdexcept>
+using namespace std;
 
-Node::Node(const string &name, const string &type)
-    : name(name), type(type), active(true)
+Node::Node(const string &name)
+    : name(name), active(true)
 {
     if (name.empty())
     {
         throw invalid_argument("Node name cannot be empty.");
-    }
-
-    if (type.empty())
-    {
-        throw invalid_argument("Node type cannot be empty.");
     }
 }
 
@@ -24,11 +20,6 @@ Node::~Node() = default;
 string Node::getName() const
 {
     return name;
-}
-
-string Node::getType() const
-{
-    return type;
 }
 
 bool Node::isActive() const
@@ -93,11 +84,16 @@ void Node::removeInterface(int portNumber)
     interfaces.erase(it);
 }
 
+string Node::getType() const
+{
+    return "node";
+}
+
 void Node::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
 {
     if (!active)
     {
-        cout << "[" << name << "] dropped packet: node is inactive." << endl;
+        cout << "[" << name << "] dropped data: node is inactive." << endl;
         return;
     }
 
@@ -107,18 +103,13 @@ void Node::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes
          << inInterface->getPortNumber()
          << endl;
 
-    try
-    {
-        Packet packet = Packet::fromBytes(rawBytes);
+    cout << "[" << name << "] raw bytes: ";
 
-        cout << "[" << name << "] decoded payload: "
-             << packet.getPayloadAsString()
-             << endl;
-    }
-    catch (const exception &e)
+    for (uint8_t byte : rawBytes)
     {
-        cout << "[" << name << "] failed to decode packet: "
-             << e.what()
-             << endl;
+        cout << hex << uppercase << setw(2) << setfill('0')
+             << static_cast<int>(byte) << " ";
     }
+
+    cout << dec << endl;
 }
