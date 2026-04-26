@@ -1,5 +1,5 @@
-#include "Node.hpp"
-#include "Interface.hpp"
+#include "core/Node.hpp"
+#include "core/Interface.hpp"
 
 #include <iostream>
 #include <iomanip>

@@ -1,7 +1,7 @@
-#include "Packet.hpp"
-#include "Node.hpp"
-#include "Interface.hpp"
-#include "Link.hpp"
+#include "core/Packet.hpp"
+#include "core/Node.hpp"
+#include "core/Interface.hpp"
+#include "core/Link.hpp"
 
 #include <cassert>
 #include <cstdint>

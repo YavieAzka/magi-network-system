@@ -1,6 +1,6 @@
-#include "Interface.hpp"
-#include "Node.hpp"
-#include "Link.hpp"
+#include "core/Interface.hpp"
+#include "core/Node.hpp"
+#include "core/Link.hpp"
 
 #include <iostream>
 #include <stdexcept>
