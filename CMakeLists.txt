@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(core
     src/core/Node.cpp
     src/core/interface.cpp
-    include/core/Link.cpp
+    src/core/Link.cpp
     src/core/JsonParser.cpp
     src/core/TopologyParser.cpp
 )
