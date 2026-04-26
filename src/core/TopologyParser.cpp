@@ -1,5 +1,5 @@
-#include "core/TopologyParser.hpp"
-#include "core/JsonParser.hpp"
+#include "../../include/core/TopologyParser.hpp"
+#include "../../include/core/JsonParser.hpp"
 #include <stdexcept>
 
 static HostConfig parseHost(const JsonValue &j)
