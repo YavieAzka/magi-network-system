@@ -8,12 +8,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(core
     src/core/Node.cpp
     src/core/interface.cpp
-    src/core/Link.cpp 
-    src/core/Packet.cpp 
+    src/core/Link.cpp
+    src/core/Packet.cpp
+    src/core/Simulator.cpp
 )
 
 add_library(util 
-    src/util/TopologyParser.cpp 
+    src/util/TopologyParser.cpp
+    src/util/TopologySerializer.cpp
     src/util/JsonParser.cpp
 )
 
@@ -31,5 +33,5 @@ add_executable(jarkom
     src/main.cpp
 ) 
 
-target_link_libraries(magi_system PRIVATE core util)
+target_link_libraries(jarkom PRIVATE core util)
 
