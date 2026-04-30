@@ -11,5 +11,5 @@ CTestTestfile.cmake
 *.o
 *.exe
 *.out
-
+magi_system
 compile_commands.json

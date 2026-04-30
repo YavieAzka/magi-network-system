@@ -1,4 +1,4 @@
-#include "../../include/core/Packet.hpp"
+#include "core/Packet.hpp"
 
 Packet::Packet(vector<uint8_t> data) : payload(std::move(data)) {}
 

@@ -8,9 +8,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(core
     src/core/Node.cpp
     src/core/interface.cpp
-    src/core/Link.cpp
-    src/core/JsonParser.cpp
-    src/core/TopologyParser.cpp
+    src/core/Link.cpp 
+    src/core/Packet.cpp 
+)
+
+add_library(util 
+    src/util/TopologyParser.cpp 
+    src/util/JsonParser.cpp
 )
 
 target_include_directories(core PUBLIC
@@ -19,12 +23,7 @@ target_include_directories(core PUBLIC
 
 add_executable(jarkom
     src/main.cpp
-)
+) 
 
 target_link_libraries(jarkom PRIVATE core)
 
-add_executable(test_core
-    src/core/test_core.cpp
-)
-
-target_link_libraries(test_core PRIVATE core)

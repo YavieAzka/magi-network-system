@@ -1,7 +1,7 @@
 #ifndef TOPOLOGY_PARSER_HPP
 #define TOPOLOGY_PARSER_HPP
 
-#include "TopologyTypes.hpp"
+#include "core/TopologyTypes.hpp"
 #include <string>
 
 class TopologyParser

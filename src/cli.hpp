@@ -1,11 +1,11 @@
 #ifndef CLI_HPP
 #define CLI_HPP
 
-#include "../include/core/Node.hpp"
-#include "../include/core/Interface.hpp"
-#include "../include/core/Link.hpp"
-#include "../include/core/TopologyTypes.hpp"
-#include "../include/core/TopologyParser.hpp"
+#include "core/Node.hpp"
+#include "core/Interface.hpp"
+#include "core/Link.hpp"
+#include "core/TopologyTypes.hpp"
+#include "util/TopologyParser.hpp"
 
 #include <string>
 #include <vector>

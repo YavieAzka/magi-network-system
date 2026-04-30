@@ -25,6 +25,8 @@ P2
 P3
 | task | deliverables | 
 | ---- | ------------ | 
+| ARP parser | ya | 
+| ARP ethernetFrame | ya | 
 | create ARPCache | do your research ~~~ | 
 | ARP request builder | ARPPacket with opcode, sender_mac, sender_ip, target_mac, target_ip | 
 | ARP reply builder | ARPPacket with opcode for reply | 

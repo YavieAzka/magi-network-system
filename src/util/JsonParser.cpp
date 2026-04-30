@@ -4,7 +4,7 @@
  * */ 
 
 
-#include "../../include/core/JsonParser.hpp"
+#include "util/JsonParser.hpp"
 
 #include <stdexcept>
 #include <fstream>
