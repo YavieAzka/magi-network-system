@@ -6,9 +6,6 @@ P1
 | task | deliverables | 
 | ---- | ------------ | 
 | NetUtils | stringToIP(), ipToString(), etc. | 
-| refactor interface, MAC from string to vector<uin8_t> | self explanatory | 
-| update addInterface() | accept vector instead of string | 
-| generateMac() | return vector instead of string | 
 | update cmakelist | self explanatory | 
 
 P2
