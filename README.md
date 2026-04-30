@@ -49,10 +49,9 @@ P5
 | host class | extension of node | 
 | sendLayer3Packet | kayak praktikum | 
 | send ARP request | kayak praktikum | 
-| sendARP reply | kayka praktikum | 
+| sendARP reply | kayak praktikum | 
 | handleReceive | deserialize -> ethernetFrame, if ethertype=0x0806 then arp processing, else if ethertype=0x0800 -> print received IP packet info | 
-| router | extension of node 
-| CLI for createNode() switch, host, router. build from config() too | construcotrsssS|
+| CLI for createNode() switch, host, . build from config() too | construcotrsssS|
 | integration | | 
 
 remember to write unit testing ~~~. 
