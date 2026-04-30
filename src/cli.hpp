@@ -6,7 +6,6 @@
 #include "core/Link.hpp"
 #include "core/TopologyTypes.hpp"
 #include "util/TopologyParser.hpp"
-
 #include <string>
 #include <vector>
 #include <map>

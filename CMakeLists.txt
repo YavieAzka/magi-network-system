@@ -21,9 +21,15 @@ target_include_directories(core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+
+target_include_directories(util PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 add_executable(jarkom
+    src/cli.cpp
     src/main.cpp
 ) 
 
-target_link_libraries(jarkom PRIVATE core)
+target_link_libraries(magi_system PRIVATE core util)
 
