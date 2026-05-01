@@ -1,11 +1,11 @@
 #include "../../include/layer2/Switch.hpp"
-Switch::Switch(const string& name, int _numPorts = 24): Node(name), numPorts(_numPorts){
+Switch::Switch(const string& name, int _numPorts): Node(name), numPorts(_numPorts){
     for(int i = 0; i < numPorts; i++){
         portConfigs[i] = PortConfig();
     }
     cout << "[" << name << "] Swicth dibuat dengan " << numPorts << " numPorts\n";
 }
-void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> allowedVlans = {}){
+void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> allowedVlans){
     if (!isValidPort(port)) {
         cerr << "[" << getName() << "] ERROR: Port " << port << " tidak valid.\n";
         return;

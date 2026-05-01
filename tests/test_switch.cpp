@@ -122,10 +122,6 @@ void testGetType() {
 }
 
 int main() {
-    std::cout << "╔══════════════════════════════════╗\n";
-    std::cout << "║       SWITCH UNIT TESTS          ║\n";
-    std::cout << "╚══════════════════════════════════╝\n";
-
     testLearnAndLookup();
     testMACUpdate();
     testConfigurePort();
@@ -134,10 +130,8 @@ int main() {
     testHandleReceiveInvalidPort();
     testGetType();
 
-    std::cout << "\n══════════════════════════════════\n";
     std::cout << "PASSED : " << testsPassed << "\n";
     std::cout << "FAILED : " << testsFailed << "\n";
-    std::cout << "══════════════════════════════════\n";
 
     return testsFailed > 0 ? 1 : 0;
 }
