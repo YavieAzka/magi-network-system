@@ -11,6 +11,8 @@ add_library(core
     src/core/Link.cpp
     src/core/Packet.cpp
     src/core/Simulator.cpp
+    src/layer2/EthernetFrame.cpp
+    src/layer2/Swicth.cpp
 )
 
 add_library(util 
@@ -27,6 +29,15 @@ target_include_directories(core PUBLIC
 target_include_directories(util PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_include_directories(layer2 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(layer2 PRIVATE core util)
+
+add_executable(test_switch
+    tests/test_switch.cpp
+)
+target_link_libraries(test_switch PRIVATE layer2 core util)
 
 add_executable(jarkom
     src/cli.cpp
