@@ -1,10 +1,11 @@
 #include "../../include/layer2/Switch.hpp"
 Switch::Switch(const string& name, int _numPorts): Node(name), numPorts(_numPorts){
-    for(int i = 0; i < numPorts; i++){
+    for(int i = 1; i <= numPorts; i++){
         portConfigs[i] = PortConfig();
     }
     cout << "[" << name << "] Swicth dibuat dengan " << numPorts << " numPorts\n";
 }
+
 void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> allowedVlans){
     if (!isValidPort(port)) {
         cerr << "[" << getName() << "] ERROR: Port " << port << " tidak valid.\n";
@@ -13,7 +14,7 @@ void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> a
 
     portConfigs[port] = PortConfig(type, pvid, allowedVlans);
         cout << "[" << getName() << "] Port " << port
-              << " → " << (type == ACCESS ? "ACCESS" : "TRUNK")
+              << " -> " << (type == ACCESS ? "ACCESS" : "TRUNK")
               << " PVID=" << pvid;
  
     if (!allowedVlans.empty()) {
@@ -26,9 +27,15 @@ void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> a
     }
     cout << "\n";
 }
-
+static string normalizeMac(const string& mac){
+    string result = mac;
+    transform(result.begin(), result.end(), result.begin(), ::tolower);
+    return result;
+}
 void Switch::learnMAC(uint16_t vlanId, const string& mac, int port){
-    auto key = make_pair(mac, vlanId);
+    string normalizedMac = normalizeMac(mac);
+
+    auto key = make_pair(normalizedMac, vlanId);
     auto it = macTable.find(key);
     if (it == macTable.end()){
         cout << "[" << getName() << "] MAC Learn  : "
@@ -42,7 +49,8 @@ void Switch::learnMAC(uint16_t vlanId, const string& mac, int port){
     };
 }
 int Switch::lookupMAC(uint16_t vlanId, const string& mac){
-    auto key = make_pair(mac, vlanId);
+    string normalizedMac = normalizeMac(mac);
+    auto key = make_pair(normalizedMac, vlanId);
     auto it = macTable.find(key);
     if (it == macTable.end()) return -1;
     else {
@@ -97,9 +105,7 @@ void Switch::handleReceive(int ingressPort, const vector<uint8_t>& rawBytes){
 
         if (frame.vlanId != -1){
             // frame bertag masuk di access port, warning!
-            cout << "[" << getName() << "] WARN: Tagged frame (VLAN " << frame.vlanId
-                        << ") di ACCESS port " << ingressPort
-                        << ", diabaikan, pakai PVID " << cfg.pvid << "\n";
+            cout << "[" << getName() << "] WARN: Tagged frame (VLAN " << frame.vlanId << ") di ACCESS port " << ingressPort << ", diabaikan, pakai PVID " << cfg.pvid << "\n";
         }
     }
     else{
@@ -108,32 +114,27 @@ void Switch::handleReceive(int ingressPort, const vector<uint8_t>& rawBytes){
         }
         else{
             ingressVlan = cfg.pvid;
-            cout << "[" << getName() << "] Untagged frame di TRUNK port "
-                << ingressPort << ", pakai native VLAN " << ingressVlan << "\n";
+            cout << "[" << getName() << "] Untagged frame di TRUNK port " << ingressPort << ", pakai native VLAN " << ingressVlan << "\n";
         }
     }
-    cout << "[" << getName() << "] Frame masuk Port " << ingressPort
-    << " VLAN " << ingressVlan
-    << " | " << frame.srcMac << " → " << frame.destMac << "\n";
+    cout << "[" << getName() << "] Frame masuk Port " << ingressPort << " VLAN " << ingressVlan << " | " << frame.srcMac << " -> " << frame.destMac << "\n";
 
-    if (frame.srcMac != "ff:ff:ff:ff:ff:ff") {
+    if (normalizeMac(frame.srcMac) != "ff:ff:ff:ff:ff:ff") {
         learnMAC(ingressVlan, frame.srcMac, ingressPort);
     }
 
-    if (frame.destMac == "ff:ff:ff:ff:ff:ff") {
+    if (normalizeMac(frame.destMac) == "ff:ff:ff:ff:ff:ff") {
         flood(ingressVlan, frame, ingressPort);
  
     } else {
         int targetPort = lookupMAC(ingressVlan, frame.destMac);
  
         if (targetPort != -1) {
-            cout << "[" << getName() << "] MAC " << frame.destMac
-                      << " dikenal → Forward ke Port " << targetPort << "\n";
+            cout << "[" << getName() << "] MAC " << frame.destMac << " dikenal -> Forward ke Port " << targetPort << "\n";
             forwardFrame(targetPort, frame, ingressVlan);
         } else {
-            // MAC tidak dikenal → unknown unicast → flood
-            cout << "[" << getName() << "] MAC " << frame.destMac
-                      << " tidak dikenal → Flooding\n";
+            // MAC tidak dikenal -> unknown unicast -> flood
+            cout << "[" << getName() << "] MAC " << frame.destMac << " tidak dikenal -> Flooding\n";
             flood(ingressVlan, frame, ingressPort);
         }
     }
@@ -158,16 +159,13 @@ void Switch::forwardFrame(int port, EthernetFrame& frame, uint16_t ingressVlan){
     vector<uint8_t> rawBytes = frame.toBytes();
     Interface* iface = getInterface(port);
     if (iface && iface->isConnected()) {
-        cout   << "[" << getName() << "] Forward → Port " << port
-                    << " (" << (cfg.type == ACCESS ? "ACCESS" : "TRUNK")
-                    << " VLAN " << ingressVlan << ")\n";
+        cout   << "[" << getName() << "] Forward -> Port " << port << " (" << (cfg.type == ACCESS ? "ACCESS" : "TRUNK") << " VLAN " << ingressVlan << ")\n";
         iface->send(rawBytes);
     }
         
 }
 void Switch::flood(uint16_t ingressVlan, EthernetFrame& frame, int excludePort){
-    cout << "[" << getName() << "] Flooding VLAN " << ingressVlan
-              << " dari Port " << excludePort << "\n";
+    cout << "[" << getName() << "] Flooding VLAN " << ingressVlan << " dari Port " << excludePort << "\n";
  
     for (int p = 1; p <= numPorts; ++p) {
         if (p == excludePort) continue;
