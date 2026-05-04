@@ -89,8 +89,6 @@ bool Simulator::linkNodes(const string& ep1, const string& ep2, int delayMs) {
     if (ifc1->isConnected() || ifc2->isConnected()) return false;
 
     auto lnk = make_unique<Link>(ifc1, ifc2, delayMs);
-    ifc1->attachLink(lnk.get());
-    ifc2->attachLink(lnk.get());
     links.push_back(std::move(lnk));
 
     LinkConfig lc;
@@ -173,8 +171,6 @@ void Simulator::buildFromConfig() {
         if (!i1) i1 = n1->addInterface(port1, generateMac());
         if (!i2) i2 = n2->addInterface(port2, generateMac());
         auto lnk = make_unique<Link>(i1, i2, lc.delay);
-        i1->attachLink(lnk.get());
-        i2->attachLink(lnk.get());
         links.push_back(std::move(lnk));
     }
 }
