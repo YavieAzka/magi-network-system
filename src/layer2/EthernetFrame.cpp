@@ -1,23 +1,23 @@
 #include "layer2/EthernetFrame.hpp"
+#include "util/NetUtils.hpp"
+
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
+
 using namespace std;
 
 EthernetFrame::EthernetFrame()
     : destMac(""), srcMac(""), etherType(0), vlanId(-1), fcs(0) {}
 
-EthernetFrame::EthernetFrame(const string &destMac,
-                             const string &srcMac,
-                             uint16_t etherType,
-                             const vector<uint8_t> &payload,
+EthernetFrame::EthernetFrame(const string &destMac, const string &srcMac,
+                             uint16_t etherType, const vector<uint8_t> &pld,
                              int vlanId)
-    : destMac(destMac),
-      srcMac(srcMac),
-      etherType(etherType),
-      vlanId(vlanId),
-      payload(payload),
-      fcs(0) {}
+    : destMac(destMac), srcMac(srcMac), etherType(etherType),
+      vlanId(vlanId), fcs(0)
+{
+    payload = pld;
+}
 
 string EthernetFrame::getType() const
 {
@@ -28,11 +28,9 @@ vector<uint8_t> EthernetFrame::toBytes() const
 {
     vector<uint8_t> frame;
 
-    // Dst MAC (6 byte)
     auto dst = macToBytes(destMac);
     frame.insert(frame.end(), dst.begin(), dst.end());
 
-    // Src MAC (6 byte)
     auto src = macToBytes(srcMac);
     frame.insert(frame.end(), src.begin(), src.end());
 
@@ -40,8 +38,6 @@ vector<uint8_t> EthernetFrame::toBytes() const
     {
         frame.push_back(0x81);
         frame.push_back(0x00);
-
-        // TCI: PCP=0, DEI=0, VID=vlanId
         uint16_t tci = vlanId & 0x0FFF;
         frame.push_back((tci >> 8) & 0xFF);
         frame.push_back(tci & 0xFF);
@@ -74,9 +70,9 @@ void EthernetFrame::deserialize(const vector<uint8_t> &raw)
     pos += 6;
 
     uint16_t next = (static_cast<uint16_t>(raw[pos]) << 8) | raw[pos + 1];
-    if (next == 0x8100) // VLAN
+    if (next == 0x8100)
     {
-        pos += 2; // skip TPID
+        pos += 2;
         uint16_t tci = (static_cast<uint16_t>(raw[pos]) << 8) | raw[pos + 1];
         pos += 2;
         vlanId = tci & 0x0FFF;
@@ -97,7 +93,10 @@ void EthernetFrame::deserialize(const vector<uint8_t> &raw)
     payload.assign(raw.begin() + pos, raw.begin() + pos + payloadLen);
 
     size_t fcsOffset = raw.size() - 4;
-    fcs = (static_cast<uint32_t>(raw[fcsOffset]) << 24) | (static_cast<uint32_t>(raw[fcsOffset + 1]) << 16) | (static_cast<uint32_t>(raw[fcsOffset + 2]) << 8) | static_cast<uint32_t>(raw[fcsOffset + 3]);
+    fcs = (static_cast<uint32_t>(raw[fcsOffset]) << 24) |
+          (static_cast<uint32_t>(raw[fcsOffset + 1]) << 16) |
+          (static_cast<uint32_t>(raw[fcsOffset + 2]) << 8) |
+          static_cast<uint32_t>(raw[fcsOffset + 3]);
 }
 
 void EthernetFrame::calculateAndSetFcs()
@@ -149,7 +148,6 @@ bool EthernetFrame::verifyFcs() const
     frame.push_back(etherType & 0xFF);
     frame.insert(frame.end(), payload.begin(), payload.end());
 
-    // Bandingkan FCS tersimpan dengan hasil hitung ulang
     return fcs == crc32(frame);
 }
 
@@ -157,10 +155,12 @@ bool EthernetFrame::isBroadcast() const
 {
     return destMac == "FF:FF:FF:FF:FF:FF";
 }
+
 bool EthernetFrame::isTagged() const
 {
     return vlanId >= 0;
 }
+
 string EthernetFrame::toString() const
 {
     ostringstream oss;
@@ -197,28 +197,13 @@ uint32_t EthernetFrame::crc32(const vector<uint8_t> &data)
 
 vector<uint8_t> EthernetFrame::macToBytes(const string &mac)
 {
-    if (mac.size() != 17)
-        throw runtime_error("Error: Invalid MAC address: " + mac);
-
-    vector<uint8_t> bytes;
-    for (int i = 0; i < 6; i++)
-    {
-        string hex = mac.substr(i * 3, 2);
-        bytes.push_back(static_cast<uint8_t>(stoul(hex, nullptr, 16)));
-    }
-    return bytes;
+    return NetUtils::stringToMac(mac);
 }
 
 string EthernetFrame::bytesToMac(const vector<uint8_t> &bytes, size_t offset)
 {
-    ostringstream oss;
-    for (int i = 0; i < 6; i++)
-    {
-        if (i > 0)
-            oss << ":";
-        oss << hex << uppercase
-            << setw(2) << setfill('0')
-            << static_cast<int>(bytes[offset + i]);
-    }
-    return oss.str();
+    if (offset + 6 > bytes.size())
+        throw runtime_error("Error: Not enough bytes for MAC address");
+    vector<uint8_t> mac_bytes(bytes.begin() + offset, bytes.begin() + offset + 6);
+    return NetUtils::macToString(mac_bytes);
 }
