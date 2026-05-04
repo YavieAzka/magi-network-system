@@ -1,8 +1,18 @@
 #include "core/ARP.hpp"
+#include "util/NetUtils.hpp"
 
-std::vector<uint8_t> ARPPacket::toBytes() const {
+ARPPacket::ARPPacket()
+    : hardware_type(1), protocol_type(0x0800),
+      hardware_len(6), protocol_len(4), operation(0)
+{
+    sender_hw_addr.assign(6, 0);
+    target_hw_addr.assign(6, 0);
+}
+
+std::vector<uint8_t> ARPPacket::toBytes() const
+{
     std::vector<uint8_t> bytes;
-    bytes.reserve(28); 
+    bytes.reserve(28);
 
     ByteUtils::write_u16_be(bytes, hardware_type);
     ByteUtils::write_u16_be(bytes, protocol_type);
@@ -10,79 +20,105 @@ std::vector<uint8_t> ARPPacket::toBytes() const {
     bytes.push_back(protocol_len);
     ByteUtils::write_u16_be(bytes, operation);
 
-    bytes.insert(bytes.end(), sender_hw_addr.begin(), sender_hw_addr.end());
-    ByteUtils::write_u32_be(bytes, sender_prot_addr);
-    bytes.insert(bytes.end(), target_hw_addr.begin(), target_hw_addr.end());
-    ByteUtils::write_u32_be(bytes, target_prot_addr);
+    ByteUtils::append_bytes(bytes, sender_hw_addr);
+
+    uint32_t sip = NetUtils::stringToIp(sender_prot_addr);
+    ByteUtils::write_u32_be(bytes, sip);
+
+    ByteUtils::append_bytes(bytes, target_hw_addr);
+
+    uint32_t tip = NetUtils::stringToIp(target_prot_addr);
+    ByteUtils::write_u32_be(bytes, tip);
 
     return bytes;
 }
 
-bool ARPPacket::parseToARP(std::vector<uint8_t>& data){
-    if (data.size() < 28) {
-        return false;
-    }
+void ARPPacket::deserialize(const std::vector<uint8_t> &raw)
+{
+    if (raw.size() < 28)
+        throw std::out_of_range("Data too short for ARP Packet (min. 28 byte)");
 
-    hardware_type = ByteUtils::read_u16_be(data, 0); 
-    protocol_type = ByteUtils::read_u16_be(data, 2); 
-    hardware_len = data[4]; 
-    protocol_len = data[5]; 
-    operation = ByteUtils::read_u16_be(data, 6);
+    hardware_type = ByteUtils::read_u16_be(raw, 0);
+    protocol_type = ByteUtils::read_u16_be(raw, 2);
+    hardware_len = raw[4];
+    protocol_len = raw[5];
+    operation = ByteUtils::read_u16_be(raw, 6);
 
-    for (size_t i = 8; i < 14; ++i) {
-        sender_hw_addr[i - 8] = data[i];
-    }
+    sender_hw_addr.assign(raw.begin() + 8, raw.begin() + 14);
+    sender_prot_addr = NetUtils::ipToString(ByteUtils::read_u32_be(raw, 14));
 
-    sender_prot_addr = ByteUtils::read_u32_be(data, 14);
-
-    for (size_t i = 18; i < 24; ++i) {
-        target_hw_addr[i - 18] = data[i];
-    }
-
-    target_prot_addr = ByteUtils::read_u32_be(data, 24);
-    return true;
+    target_hw_addr.assign(raw.begin() + 18, raw.begin() + 24);
+    target_prot_addr = NetUtils::ipToString(ByteUtils::read_u32_be(raw, 24));
 }
 
-void ARPPacket::buildRequest(){
-    operation = 1;
+ARPPacket ARPPacket::createRequest(const std::vector<uint8_t> &senderMac,
+                                    const std::string &senderIp,
+                                    const std::string &targetIp)
+{
+    ARPPacket pkt;
+    pkt.operation = ARP_OP_REQUEST;
+    pkt.sender_hw_addr = senderMac;
+    pkt.sender_prot_addr = senderIp;
+    pkt.target_hw_addr.assign(6, 0);
+    pkt.target_prot_addr = targetIp;
+    return pkt;
 }
 
-void ARPPacket::buildReply(){
-    operation = 2;
+ARPPacket ARPPacket::createReply(const std::vector<uint8_t> &senderMac,
+                                  const std::string &senderIp,
+                                  const std::vector<uint8_t> &targetMac,
+                                  const std::string &targetIp)
+{
+    ARPPacket pkt;
+    pkt.operation = ARP_OP_REPLY;
+    pkt.sender_hw_addr = senderMac;
+    pkt.sender_prot_addr = senderIp;
+    pkt.target_hw_addr = targetMac;
+    pkt.target_prot_addr = targetIp;
+    return pkt;
 }
 
-bool ARPCache::checkIpInCache(std::string ip) const{
-    auto it = arpcache.find(ip);
-    if(it != arpcache.end()){
-        return true;
-    }
-    else{
-        return false;
-    }
+bool ARPCache::hasIp(const std::string &ip) const
+{
+    return arpcache.find(ip) != arpcache.end();
 }
 
-void ARPCache::addIpToCache(std::string ip, std::string mac){
+void ARPCache::addEntry(const std::string &ip, const std::string &mac)
+{
     arpcache[ip] = mac;
 }
 
-void ARPCache::clearCache(){
+void ARPCache::clearCache()
+{
     arpcache.clear();
 }
 
-std::string ARPCache::getMac(string ip){
-    return arpcache[ip];
+std::string ARPCache::getMac(const std::string &ip) const
+{
+    auto it = arpcache.find(ip);
+    if (it != arpcache.end())
+        return it->second;
+    return "";
 }
 
-void ARPCache::clearQueue(){
-    ipPacketQueue.clear();
-}
-
-void ARPCache::addPacketToCache(std::string ip, std::vector<uint8_t> packet){
+void ARPCache::enqueuePacket(const std::string &ip, const std::vector<uint8_t> &packet)
+{
     ipPacketQueue[ip].push_back(packet);
 }
 
-std::vector<std::vector<uint8_t>> ARPCache::getAndClearQueue(std::string ip){
-    vector<std::vector<uint8_t>> ret = ipPacketQueue[ip];
-    ipPacketQueue.erase(ip);
-    return ret;
+void ARPCache::clearQueue()
+{
+    ipPacketQueue.clear();
+}
+
+std::vector<std::vector<uint8_t>> ARPCache::dequeueAll(const std::string &ip)
+{
+    std::vector<std::vector<uint8_t>> result;
+    auto it = ipPacketQueue.find(ip);
+    if (it != ipPacketQueue.end())
+    {
+        result = std::move(it->second);
+        ipPacketQueue.erase(it);
+    }
+    return result;
 }
