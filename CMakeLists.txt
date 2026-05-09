@@ -18,11 +18,16 @@ add_library(layer2
     src/layer2/EthernetFrame.cpp
 )
 
-add_library(util 
+add_library(util
     src/util/TopologyParser.cpp
     src/util/TopologySerializer.cpp
     src/util/JsonParser.cpp
     src/util/NetUtils.cpp
+)
+
+add_library(layer2
+    src/layer2/EthernetFrame.cpp
+    src/layer2/Switch.cpp
 )
 
 target_include_directories(core PUBLIC
@@ -36,6 +41,15 @@ target_include_directories(layer2 PUBLIC
 target_include_directories(util PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_include_directories(layer2 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(layer2 PRIVATE core util)
+
+add_executable(test_switch
+    tests/test_switch.cpp
+)
+target_link_libraries(test_switch PRIVATE layer2 core util)
 
 add_executable(jarkom
     src/cli.cpp
