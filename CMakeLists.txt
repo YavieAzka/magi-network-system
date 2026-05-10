@@ -5,46 +5,38 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_library(core
-    src/core/Node.cpp
-    src/core/interface.cpp
-    src/core/Link.cpp
-    src/core/Packet.cpp
-    src/core/Simulator.cpp
-    src/core/ARP.cpp
-)
-
-add_library(layer2
-    src/layer2/EthernetFrame.cpp
-)
-
 add_library(util
     src/util/TopologyParser.cpp
     src/util/TopologySerializer.cpp
     src/util/JsonParser.cpp
     src/util/NetUtils.cpp
 )
+target_include_directories(util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(layer2
     src/layer2/EthernetFrame.cpp
+    src/layer2/ARP.cpp
     src/layer2/Switch.cpp
 )
-
-target_include_directories(core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_include_directories(layer2 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_include_directories(util PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_include_directories(layer2 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+target_include_directories(layer2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer2 PRIVATE core util)
+
+add_library(layer3
+    src/layer3/IPv4Packet.cpp
+    src/layer3/ICMPMessage.cpp
+)
+target_include_directories(layer3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(layer3 PRIVATE util)
+
+add_library(core
+    src/core/Node.cpp
+    src/core/Interface.cpp
+    src/core/Link.cpp
+    src/core/Packet.cpp
+    src/core/Simulator.cpp
+    src/core/Host.cpp
+)
+target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(test_switch
     tests/test_switch.cpp
@@ -54,7 +46,5 @@ target_link_libraries(test_switch PRIVATE layer2 core util)
 add_executable(jarkom
     src/cli.cpp
     src/main.cpp
-) 
-
-target_link_libraries(jarkom PRIVATE core layer2 util)
-
+)
+target_link_libraries(jarkom PRIVATE core layer2 layer3 util)
