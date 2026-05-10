@@ -28,6 +28,7 @@ public:
     void printRoutingTable() const; 
 
     ARPCache& getArpCache() { return arpCache_; }
+    void printArpCache() const;
 
     void setInterfaceIp(int port, const std::string& ipCidr); 
 

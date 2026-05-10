@@ -10,6 +10,7 @@ IPv4Packet::IPv4Packet(const std::string &_src, const std::string &_dst,
     this->srcIP = _src;
     this->dstIP = _dst;
     this->payload = _payload;
+    this->checksum = this->calculateChecksum();
 }
 
 std::vector<std::uint8_t> IPv4Packet::toBytes() const
@@ -29,8 +30,8 @@ std::vector<std::uint8_t> IPv4Packet::toBytes() const
 
     buf[8] = this->ttl;
     buf[9] = this->protocol;
-    buf[10] = 0;
-    buf[11] = 0;
+    buf[10] = (this->checksum >> 8) & 0xFF;
+    buf[11] = this->checksum & 0xFF;
 
     uint32_t byteIPv4Src = NetUtils::stringToIp(srcIP);
     buf[12] = (byteIPv4Src >> 24) & 0xFF;

@@ -4,6 +4,8 @@
 #include <sstream>
 #include <algorithm>
 #include "core/Host.hpp"
+#include "core/Router.hpp"
+#include "layer2/Switch.hpp"
 using namespace std;
 
 #define C_OK "\033[32m"
@@ -203,10 +205,17 @@ bool CLI::processCommand(const string &line)
     if (maybeNode != nullptr)
     {
         Host *host = dynamic_cast<Host *>(maybeNode);
-
+        Router *router = dynamic_cast<Router *>(maybeNode);
+        Switch *sw = dynamic_cast<Switch *>(maybeNode);
         if (args.size() >= 2 && args[1] == "arp")
         {
-            if (!host)
+            if(host){
+                host->printArpCache();
+            }
+            else if(router){
+                router->printArpCache();
+            }
+            else
             {
                 err(args[0] + " bukan host");
                 return true;
@@ -231,6 +240,23 @@ bool CLI::processCommand(const string &line)
                 return true;
             }
             host->traceroute(args[2]);
+        }
+        else if(args.size() >= 3 && args[1] == "route")
+        {
+            if (!router)
+            {
+                err(args[0] + " bukan router");
+                return true;
+            }
+            router->printRoutingTable();
+        }
+        else if (args.size() >= 2 && (args[1] == "mac" || args[1] == "mactable"))
+        {
+            if (!sw) {
+                err(args[0] + " bukan switch");
+                return true;
+            }
+            sw->printMACTable();
         }
         else
         {

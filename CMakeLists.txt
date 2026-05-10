@@ -35,6 +35,7 @@ add_library(core
     src/core/Packet.cpp
     src/core/Simulator.cpp
     src/core/Host.cpp
+    src/core/Router.cpp
 )
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -42,6 +43,10 @@ add_executable(test_switch
     tests/test_switch.cpp
 )
 target_link_libraries(test_switch PRIVATE layer2 core util)
+add_executable(test_layer3
+    tests/test_layer3.cpp
+)
+target_link_libraries(test_layer3 PRIVATE core layer2 layer3 util)
 
 add_executable(jarkom
     src/cli.cpp

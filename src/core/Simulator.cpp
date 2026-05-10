@@ -2,6 +2,8 @@
 #include "core/Node.hpp"
 #include "core/Interface.hpp"
 #include "core/Link.hpp"
+#include "core/Router.hpp"
+#include "layer2/Switch.hpp"
 #include "util/TopologyParser.hpp"
 #include "util/TopologySerializer.hpp"
 #include "core/Host.hpp"
@@ -57,12 +59,23 @@ Node *Simulator::createNode(const string &type, const string &name)
     }
     else if (t == "switch")
     {
-        newNode = make_unique<Node>(name);
+        newNode = make_unique<Switch>(name);
         SwitchConfig sc;
         sc.name = name;
         sc.num_ports = 24;
         topology.switches.push_back(sc);
     }
+    else if(t == "router")
+    {
+        newNode = make_unique<Router>(name);
+        RouterConfig rc;
+        rc.name = name;
+        RouterInterfaceConfig ifc;
+        ifc.port = 1;
+        ifc.ip_address = "0.0.0.0/0";
+        rc.interfaces.push_back(ifc);
+        topology.routers.push_back(rc);
+    }   
     else
     {
         return nullptr;
@@ -169,7 +182,7 @@ void Simulator::buildFromConfig()
     }
     for (const auto &sw : topology.switches)
     {
-        auto n = make_unique<Node>(sw.name);
+        auto n = make_unique<Switch>(sw.name);
         n->addInterface(1, generateMac());
         for (const auto &vl : sw.vlans)
             if (!n->getInterface(vl.port))
@@ -178,9 +191,14 @@ void Simulator::buildFromConfig()
     }
     for (const auto &r : topology.routers)
     {
-        auto n = make_unique<Node>(r.name);
-        for (const auto &ifc : r.interfaces)
+        auto n = make_unique<Router>(r.name);
+        for (const auto &ifc : r.interfaces){
             n->addInterface(ifc.port, generateMac());
+            n->setInterfaceIp(ifc.port, ifc.ip_address);
+        }
+        for (const auto& rt : r.routing_table) {
+            n->addRoute(rt.destination, rt.next_hop, rt.interface);
+        }
         nodes[r.name] = std::move(n);
     }
 

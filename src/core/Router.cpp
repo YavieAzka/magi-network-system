@@ -108,6 +108,20 @@ void Router::printRoutingTable() const
     }
     cout << string(60, '-') << "\n\n";
 }
+void Router::printArpCache() const
+{
+    cout << "\n[" << getName() << "] ARP Cache:\n";
+    cout << string(44, '-') << "\n";
+    cout << left << setw(18) << "IP Address" << setw(20) << "MAC Address" << "\n";
+    cout << string(44, '-') << "\n";
+    const auto &tbl = arpCache_.getTable();
+    if (tbl.empty())
+        cout << "(kosong)\n";
+    else
+        for (const auto &[ip, mac] : tbl)
+            cout << left << setw(18) << ip << setw(20) << mac << "\n";
+    cout << string(44, '-') << "\n\n";
+}
 
 void Router::handleReceive(Interface* inInterface, const vector<uint8_t>& rawBytes){
     if (!isActive()) return; 
