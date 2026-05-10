@@ -1,4 +1,4 @@
-#include "core/ARP.hpp"
+#include "layer2/ARP.hpp"
 #include "util/NetUtils.hpp"
 
 ARPPacket::ARPPacket()
@@ -52,8 +52,8 @@ void ARPPacket::deserialize(const std::vector<uint8_t> &raw)
 }
 
 ARPPacket ARPPacket::createRequest(const std::vector<uint8_t> &senderMac,
-                                    const std::string &senderIp,
-                                    const std::string &targetIp)
+                                   const std::string &senderIp,
+                                   const std::string &targetIp)
 {
     ARPPacket pkt;
     pkt.operation = ARP_OP_REQUEST;
@@ -65,9 +65,9 @@ ARPPacket ARPPacket::createRequest(const std::vector<uint8_t> &senderMac,
 }
 
 ARPPacket ARPPacket::createReply(const std::vector<uint8_t> &senderMac,
-                                  const std::string &senderIp,
-                                  const std::vector<uint8_t> &targetMac,
-                                  const std::string &targetIp)
+                                 const std::string &senderIp,
+                                 const std::vector<uint8_t> &targetMac,
+                                 const std::string &targetIp)
 {
     ARPPacket pkt;
     pkt.operation = ARP_OP_REPLY;
@@ -121,4 +121,9 @@ std::vector<std::vector<uint8_t>> ARPCache::dequeueAll(const std::string &ip)
         ipPacketQueue.erase(it);
     }
     return result;
+}
+
+const std::map<std::string, std::string> &ARPCache::getTable() const
+{
+    return arpcache;
 }
