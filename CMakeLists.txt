@@ -39,10 +39,17 @@ add_library(core
 )
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+add_library(layer4
+    src/layer4/UDPSegment.cpp
+)
+target_include_directories(layer4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(layer4 PRIVATE util)
+
 add_executable(test_switch
     tests/test_switch.cpp
 )
 target_link_libraries(test_switch PRIVATE layer2 core util)
+
 add_executable(test_layer3
     tests/test_layer3.cpp
 )
@@ -52,4 +59,4 @@ add_executable(jarkom
     src/cli.cpp
     src/main.cpp
 )
-target_link_libraries(jarkom PRIVATE core layer2 layer3 util)
+target_link_libraries(jarkom PRIVATE core layer2 layer3 layer4  util)
