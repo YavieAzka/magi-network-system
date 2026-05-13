@@ -1,8 +1,14 @@
-#include "layer4/TCPSegment.hpp"
+#include "../../include/layer4/TCPSegment.hpp"
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+
+TCPSegment::TCPSegment()
+    : srcPort(0), dstPort(0), seqNum(0), ackNum(0),
+      dataOffset(5),
+      flags(0), windowSize(65535), checksum(0), urgentPointer(0)
+{}
 
 uint16_t onesComplementChecksum(const std::vector<uint8_t>& data) {
     uint32_t sum = 0;
@@ -186,7 +192,7 @@ bool TCPSegment::verifyChecksum(const std::string& srcIP, const std::string& dst
     data.insert(data.end(), segBytes.begin(), segBytes.end());
  
     uint16_t result = onesComplementChecksum(data);
-    return result == 0xFFFF;
+    return result == 0x0000;
 }
  
 // Buat debugging aja
