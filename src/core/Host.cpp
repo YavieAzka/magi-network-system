@@ -134,10 +134,18 @@ bool Host::ping(const string &targetIp, int count)
 
         if (icmpReplyReceived_)
         {
-            cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
-                 << ": seq=" << seq
-                 << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
-            ++received;
+            if (icmpReplyType_ == ICMP::TYPE_ECHO_REPLY) { // <---- TAMBAHKAN IF INI
+                cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
+                     << ": seq=" << seq
+                     << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
+                ++received;
+            } 
+            else{
+                cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
+                    << ": seq=" << seq
+                    << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
+                ++received;
+            }
         }
         else
         {
@@ -204,6 +212,18 @@ void Host::traceroute(const string &targetIp, int maxHops)
     }
     cout << "[" << getName() << "] Max hops tercapai.\n\n";
 }
+void Host::setIpAddress(const string& ipCidr) {
+    auto [ip, prefix] = NetUtils::parseCIDR(ipCidr);
+    ipRaw_ = ip;
+    prefix_ = prefix;
+    cout << "[" << getName() << "] IP telah dikonfigurasi ke " << getIpAddress() << "/" << (int)prefix_ << "\n";
+}
+
+void Host::setDefaultGateway(const string& gw) {
+    gatewayRaw_ = NetUtils::stringToIp(gw);
+    cout << "[" << getName() << "] Gateway telah dikonfigurasi ke " << getDefaultGateway() << "\n";
+}
+
 
 void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
 {
@@ -333,18 +353,21 @@ void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpByte
         {
             icmpReplyReceived_ = true;
             icmpReplySrcIp_ = srcIp;
+            icmpReplyType_ = msg.getICMPType();
         }
     }
     else if (msg.getICMPType() == ICMP::TYPE_TIME_EXCEEDED)
     {
         icmpReplyReceived_ = true;
         icmpReplySrcIp_ = srcIp;
+        icmpReplyType_ = msg.getICMPType();
         cout << "[" << getName() << "] ICMP Time Exceeded dari " << srcIp << "\n";
     }
     else if (msg.getICMPType() == ICMP::TYPE_UNREACHABLE)
     {
         icmpReplyReceived_ = true;
         icmpReplySrcIp_ = srcIp;
+        icmpReplyType_ = msg.getICMPType();
         cout << "[" << getName() << "] ICMP Unreachable dari " << srcIp
              << " code=" << (int)msg.getCode() << "\n";
     }

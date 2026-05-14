@@ -30,6 +30,8 @@ public:
 
     void handleReceive(Interface *inInterface,
                        const std::vector<uint8_t> &rawBytes) override;
+    void setIpAddress(const std::string &ipCidr);
+    void setDefaultGateway(const std::string &gw);
 
 private:
     uint32_t ipRaw_;
@@ -41,6 +43,7 @@ private:
     std::string icmpReplySrcIp_;
     uint16_t pendingIdentifier_ = 0;
     uint16_t pendingSeq_ = 0;
+    uint8_t icmpReplyType_ = 0;
 
     bool isLocalNetwork(const std::string &destIp) const;
     void sendEthernet(const std::string &destMac,

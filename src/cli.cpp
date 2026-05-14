@@ -232,6 +232,42 @@ bool CLI::processCommand(const string &line)
             int count = (args.size() >= 4) ? stoi(args[3]) : 4;
             host->ping(args[2], count);
         }
+        else if (args.size() >= 3 && args[1] == "set-ip")
+        {
+            if (host) {
+                // Format: h1 set-ip 192.168.1.10/24
+                host->setIpAddress(args[2]);
+            } else if (router) {
+                // Format: r1 set-ip 1 192.168.1.1/24
+                if (args.size() < 4) {
+                    err("Penggunaan: <NamaRouter> set-ip <port> <IP/CIDR>");
+                    return true;
+                }
+                int port = stoi(args[2]);
+                router->setInterfaceIp(port, args[3]);
+            } else {
+                err(args[0] + " tidak mendukung set-ip (hanya host/router).");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "set-gw")
+        {
+            if (host) {
+                host->setDefaultGateway(args[2]);
+            } else {
+                err("Hanya host yang mendukung set-gw.");
+            }
+        }
+        else if (args.size() >= 6 && args[1] == "ip" && args[2] == "route")
+        {
+            if (router) {
+                string nextHop = (args[4] == "-") ? "" : args[4]; 
+                int outPort = stoi(args[5]);
+                router->addRoute(args[3], nextHop, outPort);
+                ok("Route berhasil ditambahkan ke " + router->getName());
+            } else {
+                err("Perintah ip route hanya untuk router.");
+            }
+        }
         else if (args.size() >= 3 && args[1] == "traceroute")
         {
             if (!host)
