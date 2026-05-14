@@ -4,6 +4,8 @@
 #include "layer2/ARP.hpp"
 #include "layer3/IPv4Packet.hpp"
 #include "layer3/ICMPMessage.hpp"
+#include "layer4/TCPSegment.hpp"
+#include "layer4/TCPSocket.hpp"
 #include "util/NetUtils.hpp"
 #include <iostream>
 #include <iomanip>
@@ -298,6 +300,10 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
 
     if (ipPkt.protocol == IPv4Packet::PROTOCOL_ICMP)
         handleIcmpPacket(ipPkt.srcIP, ipPkt.payload);
+
+    // added by yavie after implementing TCPSocket
+    else if (ipPkt.protocol == 6) // 6 = nomor protokol TCP
+        handleTCPSegment(ipPkt.srcIP, ipPkt.payload);
 }
 
 void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpBytes)
@@ -348,4 +354,29 @@ void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpByte
         cout << "[" << getName() << "] ICMP Unreachable dari " << srcIp
              << " code=" << (int)msg.getCode() << "\n";
     }
+}
+
+void Host::handleTCPSegment(const string &srcIp, const vector<uint8_t> &tcpBytes)
+{
+    TCPSegment seg;
+    try { seg = TCPSegment::deserialize(tcpBytes); }
+    catch (const exception &e) {
+        cerr << "[" << getName() << "] Gagal parse TCPSegment: " << e.what() << "\n";
+        return;
+    }
+
+    // Cari socket yang mendengarkan di destination port ini
+    auto it = tcpSockets_.find(seg.dstPort);
+    if (it == tcpSockets_.end()) {
+        cout << "[" << getName() << "] Tidak ada socket di port "
+             << seg.dstPort << ", drop\n";
+        return;
+    }
+
+    TCPSocket* socket = it->second;
+
+    // Beri tahu socket siapa pengirimnya — inilah yang dimaksud sebelumnya
+    socket->remoteIP = srcIp;
+
+    socket->handleIncomingSegment(seg);
 }

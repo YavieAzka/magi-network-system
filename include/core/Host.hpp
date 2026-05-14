@@ -1,6 +1,7 @@
 #pragma once
 #include "core/Node.hpp"
 #include "layer2/ARP.hpp"
+#include "layer4/TCPSocket.hpp"
 #include <string>
 #include <cstdint>
 
@@ -36,12 +37,16 @@ private:
     uint8_t prefix_;
     uint32_t gatewayRaw_;
     ARPCache arpCache_;
-
+    
     bool icmpReplyReceived_ = false;
     std::string icmpReplySrcIp_;
     uint16_t pendingIdentifier_ = 0;
     uint16_t pendingSeq_ = 0;
 
+    // -- added by yavie after implementing TCP Socket:
+    std::map<uint16_t, TCPSocket*> tcpSockets_; // port -> socket
+    void handleTCPSegment(const std::string& srcIp,
+                      const std::vector<uint8_t>& tcpBytes);
     bool isLocalNetwork(const std::string &destIp) const;
     void sendEthernet(const std::string &destMac,
                       uint16_t etherType,
@@ -52,4 +57,5 @@ private:
                           const std::vector<uint8_t> &ipBytes);
     void handleIcmpPacket(const std::string &srcIp,
                           const std::vector<uint8_t> &icmpBytes);
+    
 };

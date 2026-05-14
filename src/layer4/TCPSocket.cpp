@@ -1,5 +1,5 @@
 // Bagian 1 — Includes
-#include "include/layer4/TCPSocket.hpp"
+#include "layer4/TCPSocket.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -8,7 +8,7 @@ std::string TCPSocket::stateToString() const {
         case TCPState::CLOSED:      return "CLOSED";
         case TCPState::LISTEN:      return "LISTEN";
         case TCPState::SYN_SENT:    return "SYN_SENT";
-        case TCPState::SYN_RCVD:    "SYN_RCVD";
+        case TCPState::SYN_RCVD:    return "SYN_RCVD";
         case TCPState::ESTABLISHED:  return "ESTABLISHED";
         case TCPState::FIN_WAIT_1:  return "FIN_WAIT_1";
         case TCPState::FIN_WAIT_2:  return "FIN_WAIT_2";
