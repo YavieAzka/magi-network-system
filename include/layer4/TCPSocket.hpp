@@ -1,10 +1,12 @@
-// Bagian 1 — Guard, Includes
 #pragma once
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <deque>
 #include <functional>
+#include <iostream>
 #include "TCPSegment.hpp"
+
 enum class TCPState {
     CLOSED,
     LISTEN,
@@ -17,29 +19,37 @@ enum class TCPState {
     CLOSE_WAIT,
     LAST_ACK
 };
+
 using SendCallback = std::function<
     void(const TCPSegment&, const std::string&, uint16_t)
 >;
+
 class TCPSocket {
 public:
-
     std::string  localIP;
     uint16_t     localPort;
-    std::string  remoteIP;   // diisi saat koneksi terbentuk
-    uint16_t     remotePort; // diisi saat koneksi terbentuk
+    std::string  remoteIP;
+    uint16_t     remotePort;
     TCPState     state;
-    uint32_t     seqNum;  // seq berikutnya yang akan dikirim
-    uint32_t     ackNum;  // seq berikutnya yang diharapkan dari lawan
+    uint32_t     seqNum;
+    uint32_t     ackNum;
+    std::deque<uint8_t> receiveBuffer;
 
     SendCallback sendCallback;
+
     TCPSocket(
         const std::string& localIP,
         uint16_t           localPort,
-        SendCallback       cb
+        SendCallback       cb = [](const TCPSegment&, const std::string&, uint16_t){}
     );
 
     void activeOpen (const std::string& dstIP, uint16_t dstPort);
     void passiveOpen();
+    void close();
+
+    void sendData(const std::vector<uint8_t>& data);
+    std::vector<uint8_t> recvData();
+
     void handleIncomingSegment(const TCPSegment& seg);
 
     std::string stateToString() const;
@@ -47,9 +57,9 @@ public:
 protected:
     void transitionTo(TCPState newState);
     void sendSegment(
-        uint8_t                         flags,
-        uint32_t                        seq,
-        uint32_t                        ack,
-        const std::vector<uint8_t>&     payload = {}
+        uint8_t                     flags,
+        uint32_t                    seq,
+        uint32_t                    ack,
+        const std::vector<uint8_t>& payload = {}
     );
 };

@@ -1,7 +1,6 @@
-// Bagian 1 — Includes
 #include "layer4/TCPSocket.hpp"
-#include <iostream>
 #include <stdexcept>
+#include <algorithm>
 
 std::string TCPSocket::stateToString() const {
     switch (state) {
@@ -9,12 +8,12 @@ std::string TCPSocket::stateToString() const {
         case TCPState::LISTEN:      return "LISTEN";
         case TCPState::SYN_SENT:    return "SYN_SENT";
         case TCPState::SYN_RCVD:    return "SYN_RCVD";
-        case TCPState::ESTABLISHED:  return "ESTABLISHED";
+        case TCPState::ESTABLISHED: return "ESTABLISHED";
         case TCPState::FIN_WAIT_1:  return "FIN_WAIT_1";
         case TCPState::FIN_WAIT_2:  return "FIN_WAIT_2";
-        case TCPState::TIME_WAIT:    return "TIME_WAIT";
-        case TCPState::CLOSE_WAIT:   return "CLOSE_WAIT";
-        case TCPState::LAST_ACK:     return "LAST_ACK";
+        case TCPState::TIME_WAIT:   return "TIME_WAIT";
+        case TCPState::CLOSE_WAIT:  return "CLOSE_WAIT";
+        case TCPState::LAST_ACK:    return "LAST_ACK";
         default:                    return "UNKNOWN";
     }
 }
@@ -29,7 +28,7 @@ TCPSocket::TCPSocket(
       remoteIP(""),
       remotePort(0),
       state(TCPState::CLOSED),
-      seqNum(1000),  // ISN sederhana; di implementasi real ini random
+      seqNum(1000),
       ackNum(0),
       sendCallback(cb)
 {}
@@ -37,48 +36,45 @@ TCPSocket::TCPSocket(
 void TCPSocket::transitionTo(TCPState newState) {
     std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
               << "State: " << stateToString()
-              << " --> ";
+              << " --> " ;
     state = newState;
     std::cout << stateToString() << "\n";
 }
 
 void TCPSocket::sendSegment(
-    uint8_t                         flags,
-    uint32_t                        seq,
-    uint32_t                        ack,
-    const std::vector<uint8_t>&     payload
+    uint8_t                      flags,
+    uint32_t                     seq,
+    uint32_t                     ack,
+    const std::vector<uint8_t>&  payload
 ) {
     TCPSegment seg;
-    seg.srcPort    = localPort;
-    seg.dstPort    = remotePort;
-    seg.seqNum     = seq;
-    seg.ackNum     = ack;
-    seg.flags      = flags;
-    seg.windowSize = 65535;
-    seg.dataOffset = 5;
-    seg.payload    = payload;
+    seg.srcPort     = localPort;
+    seg.dstPort     = remotePort;
+    seg.seqNum      = seq;
+    seg.ackNum      = ack;
+    seg.flags       = flags;
+    seg.windowSize  = 65535;
+    seg.dataOffset  = 5;
+    seg.payload     = payload;
 
     seg.calculateChecksum(localIP, remoteIP);
 
     std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
-              << "Mengirim: ";
+              << "Sending: ";
     seg.print();
 
     sendCallback(seg, remoteIP, remotePort);
 }
-void TCPSocket::activeOpen(
-    const std::string& dstIP,
-    uint16_t           dstPort
-) {
+
+void TCPSocket::activeOpen(const std::string& dstIP, uint16_t dstPort) {
     if (state != TCPState::CLOSED) {
         throw std::runtime_error(
-            "activeOpen() dipanggil saat state bukan CLOSED, state saat ini: "
-            + stateToString()
-        );
+            "activeOpen() called in non-CLOSED state, current state: "
+            + stateToString());
     }
 
     remoteIP   = dstIP;
-    remotePort = dstPort;
+    remotePort  = dstPort;
 
     sendSegment(TCP_FLAG_SYN, seqNum, 0);
     seqNum += 1;
@@ -89,15 +85,53 @@ void TCPSocket::activeOpen(
 void TCPSocket::passiveOpen() {
     if (state != TCPState::CLOSED) {
         throw std::runtime_error(
-            "passiveOpen() dipanggil saat state bukan CLOSED, state saat ini: "
-            + stateToString()
-        );
+            "passiveOpen() called in non-CLOSED state, current state: "
+            + stateToString());
     }
     transitionTo(TCPState::LISTEN);
 }
+
+void TCPSocket::close() {
+    switch (state) {
+        case TCPState::ESTABLISHED:
+            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum, ackNum);
+            seqNum += 1;
+            transitionTo(TCPState::FIN_WAIT_1);
+            break;
+        case TCPState::CLOSE_WAIT:
+            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum, ackNum);
+            seqNum += 1;
+            transitionTo(TCPState::LAST_ACK);
+            break;
+        default:
+            std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+<< "close() called in state " << stateToString()
+                       << ", invalid transition.\n";
+            break;
+    }
+}
+
+void TCPSocket::sendData(const std::vector<uint8_t>& data) {
+    if (state != TCPState::ESTABLISHED) {
+        std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+                  << "sendData() called in state " << stateToString()
+                  << ", must be ESTABLISHED.\n";
+        return;
+    }
+
+    sendSegment(TCP_FLAG_PSH | TCP_FLAG_ACK, seqNum, ackNum, data);
+    seqNum += static_cast<uint32_t>(data.size());
+}
+
+std::vector<uint8_t> TCPSocket::recvData() {
+    std::vector<uint8_t> result(receiveBuffer.begin(), receiveBuffer.end());
+    receiveBuffer.clear();
+    return result;
+}
+
 void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
     std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
-              << "Menerima: ";
+              << "Receiving: ";
     seg.print();
 
     switch (state) {
@@ -115,32 +149,112 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
             break;
         }
 
-        case TCPState::SYN_RCVD: {
-            if (!(seg.flags & TCP_FLAG_ACK)) break;
-            if (seg.ackNum != seqNum) {
-                std::cout << "[TCPSocket] Peringatan: ackNum tidak sesuai, "
-                          << "ekspektasi: " << seqNum
-                          << " diterima: "  << seg.ackNum << "\n";
-                break;
-            }
-
-            transitionTo(TCPState::ESTABLISHED);
-            break;
-        }
         case TCPState::SYN_SENT: {
             bool isSynAck = (seg.flags & TCP_FLAG_SYN)
                           && (seg.flags & TCP_FLAG_ACK);
             if (!isSynAck) break;
             if (seg.ackNum != seqNum) {
-                std::cout << "[TCPSocket] Peringatan: ackNum tidak sesuai, "
-                          << "ekspektasi: " << seqNum
-                          << " diterima: "  << seg.ackNum << "\n";
+                std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+<< "Warning: ackNum mismatch, "
+                           << "expected: " << seqNum
+                           << " got: " << seg.ackNum << "\n";
                 break;
             }
             ackNum = seg.seqNum + 1;
             sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
 
             transitionTo(TCPState::ESTABLISHED);
+            break;
+        }
+
+        case TCPState::SYN_RCVD: {
+            if (!(seg.flags & TCP_FLAG_ACK)) break;
+            if (seg.ackNum != seqNum) {
+                std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+                          << "Warning: ackNum mismatch, "
+                          << "expected: " << seqNum
+                          << " got: " << seg.ackNum << "\n";
+                break;
+            }
+
+            transitionTo(TCPState::ESTABLISHED);
+            break;
+        }
+
+        case TCPState::ESTABLISHED: {
+            if (seg.flags & TCP_FLAG_FIN) {
+                ackNum = seg.seqNum + 1;
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::CLOSE_WAIT);
+                break;
+            }
+
+            if (seg.flags & TCP_FLAG_ACK) {
+                if (seg.ackNum > seqNum) {
+                    std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+                              << "Warning: ACK for unsent seq.\n";
+                }
+            }
+
+            if (!seg.payload.empty()) {
+                receiveBuffer.insert(receiveBuffer.end(),
+                                     seg.payload.begin(), seg.payload.end());
+                ackNum = seg.seqNum + static_cast<uint32_t>(seg.payload.size());
+
+                std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+                          << "Received " << seg.payload.size()
+                          << " bytes, buffer size: " << receiveBuffer.size() << "\n";
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+            }
+            break;
+        }
+
+        case TCPState::FIN_WAIT_1: {
+            bool isFinAck = (seg.flags & TCP_FLAG_FIN) && (seg.flags & TCP_FLAG_ACK);
+            if (isFinAck) {
+                ackNum = seg.seqNum + 1;
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::TIME_WAIT);
+                break;
+            }
+            if (seg.flags & TCP_FLAG_ACK) {
+                if (seg.ackNum != seqNum) {
+                    break;
+                }
+                transitionTo(TCPState::FIN_WAIT_2);
+            }
+            if (seg.flags & TCP_FLAG_FIN) {
+                ackNum = seg.seqNum + 1;
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::TIME_WAIT);
+                break;
+            }
+            break;
+        }
+
+        case TCPState::FIN_WAIT_2: {
+            if (seg.flags & TCP_FLAG_FIN) {
+                ackNum = seg.seqNum + 1;
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::TIME_WAIT);
+            }
+            break;
+        }
+
+        case TCPState::CLOSE_WAIT: {
+            if (seg.flags & TCP_FLAG_ACK) {
+            }
+            break;
+        }
+
+        case TCPState::LAST_ACK: {
+            if (seg.flags & TCP_FLAG_ACK) {
+                transitionTo(TCPState::CLOSED);
+            }
+            break;
+        }
+
+        case TCPState::TIME_WAIT: {
             break;
         }
 

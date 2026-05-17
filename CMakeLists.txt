@@ -57,6 +57,11 @@ add_executable(test_layer3
 )
 target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 util)
 
+add_executable(test_tcp
+    tests/test_tcp.cpp
+)
+target_link_libraries(test_tcp PRIVATE layer4 core util)
+
 add_executable(jarkom
     src/cli.cpp
     src/main.cpp

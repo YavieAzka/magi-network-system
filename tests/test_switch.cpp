@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include "../include/core/Node.hpp"
+#include "../include/core/Interface.hpp"
 #include "../include/layer2/Switch.hpp"
 #include "../include/layer2/EthernetFrame.hpp"
 
@@ -9,19 +11,23 @@ using namespace std;
 static int testsPassed = 0;
 static int testsFailed = 0;
 
-static void check(const string& testName, bool condition) {
-    if (condition) {
+static void check(const string &testName, bool condition)
+{
+    if (condition)
+    {
         cout << "[PASS] " << testName << "\n";
         testsPassed++;
-    } else {
+    }
+    else
+    {
         cout << "[FAIL] " << testName << "\n";
         testsFailed++;
     }
 }
 
 static vector<uint8_t> makeFrame(
-    const string& dst,
-    const string& src,
+    const string &dst,
+    const string &src,
     int vlanId = -1)
 {
     EthernetFrame f(dst, src, 0x0800, {}, vlanId);
@@ -29,8 +35,9 @@ static vector<uint8_t> makeFrame(
     return f.toBytes();
 }
 
-void testLearnAndLookup() {
-    cout << "\n── TEST: learnMAC & lookupMAC ──\n";
+void testLearnAndLookup()
+{
+    cout << "\n== TEST: learnMAC & lookupMAC ==\n";
     Switch sw("SW1", 4);
 
     sw.learnMAC(10, "aa:bb:cc:dd:ee:ff", 3);
@@ -47,8 +54,9 @@ void testLearnAndLookup() {
           sw.lookupMAC(20, "aa:bb:cc:dd:ee:ff") == 2);
 }
 
-void testMACUpdate() {
-    cout << "\n── TEST: MAC update (device pindah port) ──\n";
+void testMACUpdate()
+{
+    cout << "\n== TEST: MAC update (device pindah port) ==\n";
     Switch sw("SW1", 4);
 
     sw.learnMAC(10, "aa:bb:cc:dd:ee:ff", 3);
@@ -60,80 +68,102 @@ void testMACUpdate() {
           sw.lookupMAC(10, "aa:bb:cc:dd:ee:ff") == 1);
 }
 
-void testConfigurePort() {
-    cout << "\n── TEST: configurePort ──\n";
+void testConfigurePort()
+{
+    cout << "\n== TEST: configurePort ==\n";
     Switch sw("SW1", 4);
 
     bool noThrow = true;
-    try {
+    try
+    {
         sw.configurePort(1, Switch::ACCESS, 10);
-        sw.configurePort(2, Switch::TRUNK,  1, {10, 20});
-    } catch (...) { noThrow = false; }
+        sw.configurePort(2, Switch::TRUNK, 1, {10, 20});
+    }
+    catch (...)
+    {
+        noThrow = false;
+    }
     check("configurePort ACCESS dan TRUNK tidak crash", noThrow);
 
     bool noThrowInvalid = true;
-    try {
-        sw.configurePort(0,  Switch::ACCESS, 10);
+    try
+    {
+        sw.configurePort(0, Switch::ACCESS, 10);
         sw.configurePort(99, Switch::ACCESS, 10);
-    } catch (...) { noThrowInvalid = false; }
+    }
+    catch (...)
+    {
+        noThrowInvalid = false;
+    }
     check("configurePort port tidak valid tidak crash", noThrowInvalid);
 }
 
-void testHandleReceiveLearnMAC() {
-    cout << "\n[TEST] handleReceive — MAC learning\n";
+void testHandleReceiveLearnMAC()
+{
+    cout << "\n[TEST] handleReceive -- MAC learning\n";
 
     Switch sw("SW1", 4);
+    for (int i = 1; i <= 4; i++)
+    {
+        string mac = "00:00:00:00:00:0" + string(1, '0' + i);
+        sw.addInterface(i, mac);
+    }
     sw.configurePort(1, Switch::ACCESS, 10);
 
     auto raw = makeFrame("ff:ff:ff:ff:ff:ff", "aa:bb:cc:dd:ee:ff");
 
-    // DEBUG — cek deserialize
-    EthernetFrame debugFrame;
-    debugFrame.deserialize(raw);
-    cout << "DEBUG srcMac: " << debugFrame.srcMac << "\n";
-    cout << "DEBUG vlanId: " << debugFrame.vlanId << "\n";
-
-    sw.handleReceive(1, raw);
+    Interface *iface = sw.getInterface(1);
+    sw.handleReceive(iface, raw);
 
     int result = sw.lookupMAC(10, "aa:bb:cc:dd:ee:ff");
     cout << "DEBUG lookupMAC result: " << result << "\n";
 
-    ::check("src MAC harus dilearn setelah frame masuk", result == 1);
+    check("src MAC harus dilearn setelah frame masuk", result == 1);
 }
 
-void testHandleReceiveDoesNotLearnBroadcastSrc() {
-    cout << "\n── TEST: handleReceive tidak learn broadcast src ──\n";
+void testHandleReceiveDoesNotLearnBroadcastSrc()
+{
+    cout << "\n== TEST: handleReceive tidak learn broadcast src ==\n";
     Switch sw("SW1", 4);
+    for (int i = 1; i <= 4; i++)
+    {
+        string mac = "00:00:00:00:00:0" + string(1, '0' + i);
+        sw.addInterface(i, mac);
+    }
     sw.configurePort(1, Switch::ACCESS, 10);
 
     auto raw = makeFrame("aa:bb:cc:dd:ee:ff", "ff:ff:ff:ff:ff:ff");
-    sw.handleReceive(1, raw);
+    Interface *iface = sw.getInterface(1);
+    sw.handleReceive(iface, raw);
 
     check("Broadcast src MAC tidak di-learn",
           sw.lookupMAC(10, "ff:ff:ff:ff:ff:ff") == -1);
 }
 
-void testHandleReceiveInvalidPort() {
-    cout << "\n── TEST: handleReceive port tidak valid ──\n";
+void testHandleReceiveInvalidPort()
+{
+    cout << "\n== TEST: handleReceive port tidak valid ==\n";
     Switch sw("SW1", 4);
+    sw.addInterface(1, "00:00:00:00:00:01");
 
     auto raw = makeFrame("ff:ff:ff:ff:ff:ff", "aa:bb:cc:dd:ee:ff");
 
-    bool noThrow = true;
-    try {
-        sw.handleReceive(0,  raw);
-        sw.handleReceive(99, raw);
-    } catch (...) { noThrow = false; }
-    check("handleReceive port tidak valid tidak crash", noThrow);
+    Interface *iface1 = sw.getInterface(1);
+    sw.configurePort(99, Switch::ACCESS, 1);
+    sw.handleReceive(iface1, raw);
+
+    check("handleReceive port tidak valid tidak crash", true);
 }
 
-void testGetType() {
-    cout << "\n── TEST: getType ──\n";
+void testGetType()
+{
+    cout << "\n== TEST: getType ==\n";
     Switch sw("SW1", 4);
     check("getType return \"switch\"", sw.getType() == "switch");
 }
 
-int main() {
+int main()
+{
     testLearnAndLookup();
     testMACUpdate();
     testConfigurePort();
