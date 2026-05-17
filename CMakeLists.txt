@@ -30,7 +30,7 @@ target_link_libraries(layer3 PRIVATE util)
 
 add_library(core
     src/core/Node.cpp
-    src/core/Interface.cpp
+    src/core/interface.cpp
     src/core/Link.cpp
     src/core/Packet.cpp
     src/core/Simulator.cpp
@@ -41,6 +41,8 @@ target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(layer4
     src/layer4/UDPSegment.cpp
+    src/layer4/TCPSegment.cpp
+    src/layer4/TCPSocket.cpp
 )
 target_include_directories(layer4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer4 PRIVATE util)
@@ -53,7 +55,7 @@ target_link_libraries(test_switch PRIVATE layer2 core util)
 add_executable(test_layer3
     tests/test_layer3.cpp
 )
-target_link_libraries(test_layer3 PRIVATE core layer2 layer3 util)
+target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 util)
 
 add_executable(jarkom
     src/cli.cpp

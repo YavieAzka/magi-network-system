@@ -238,7 +238,7 @@ void Host::handleArpPacket(const vector<uint8_t> &arpBytes)
     ARPPacket arp;
     try
     {
-        arp.deserialize(const_cast<vector<uint8_t> &>(arpBytes));
+        arp.deserialize(arpBytes);
     }
     catch (const exception &e)
     {
