@@ -75,11 +75,9 @@ void TCPSocket::activeOpen(const std::string& dstIP, uint16_t dstPort) {
 
     remoteIP   = dstIP;
     remotePort  = dstPort;
-
-    sendSegment(TCP_FLAG_SYN, seqNum, 0);
-    seqNum += 1;
-
     transitionTo(TCPState::SYN_SENT);
+    seqNum += 1;
+    sendSegment(TCP_FLAG_SYN, seqNum-1, 0);
 }
 
 void TCPSocket::passiveOpen() {
@@ -94,14 +92,14 @@ void TCPSocket::passiveOpen() {
 void TCPSocket::close() {
     switch (state) {
         case TCPState::ESTABLISHED:
-            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum, ackNum);
             seqNum += 1;
             transitionTo(TCPState::FIN_WAIT_1);
+            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum-1, ackNum);
             break;
         case TCPState::CLOSE_WAIT:
-            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum, ackNum);
             seqNum += 1;
             transitionTo(TCPState::LAST_ACK);
+            sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum-1, ackNum);
             break;
         default:
             std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
@@ -119,8 +117,9 @@ void TCPSocket::sendData(const std::vector<uint8_t>& data) {
         return;
     }
 
-    sendSegment(TCP_FLAG_PSH | TCP_FLAG_ACK, seqNum, ackNum, data);
+    uint32_t seqToSend = seqNum;
     seqNum += static_cast<uint32_t>(data.size());
+    sendSegment(TCP_FLAG_PSH | TCP_FLAG_ACK, seqToSend, ackNum, data);
 }
 
 std::vector<uint8_t> TCPSocket::recvData() {
@@ -142,10 +141,10 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
             remotePort = seg.srcPort;
             ackNum = seg.seqNum + 1;
 
-            sendSegment(TCP_FLAG_SYN | TCP_FLAG_ACK, seqNum, ackNum);
-            seqNum += 1;
-
             transitionTo(TCPState::SYN_RCVD);
+            seqNum += 1;
+            sendSegment(TCP_FLAG_SYN | TCP_FLAG_ACK, seqNum-1, ackNum);
+            
             break;
         }
 
@@ -161,14 +160,16 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
                 break;
             }
             ackNum = seg.seqNum + 1;
-            sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-
             transitionTo(TCPState::ESTABLISHED);
+            sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
             break;
         }
 
         case TCPState::SYN_RCVD: {
             if (!(seg.flags & TCP_FLAG_ACK)) break;
+            if (seg.seqNum != ackNum) {
+                break; 
+            }
             if (seg.ackNum != seqNum) {
                 std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
                           << "Warning: ackNum mismatch, "
@@ -182,10 +183,7 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
         }
 
         case TCPState::ESTABLISHED: {
-            if (seg.flags & TCP_FLAG_FIN) {
-                ackNum = seg.seqNum + 1;
-                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-                transitionTo(TCPState::CLOSE_WAIT);
+            if (seg.seqNum != ackNum) {
                 break;
             }
 
@@ -206,15 +204,25 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
                           << " bytes, buffer size: " << receiveBuffer.size() << "\n";
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
             }
+            if (seg.flags & TCP_FLAG_FIN) {
+                ackNum += 1;
+                transitionTo(TCPState::CLOSE_WAIT);
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+
+                seqNum += 1;
+                transitionTo(TCPState::LAST_ACK);
+                sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum-1, ackNum);
+            }
             break;
         }
 
         case TCPState::FIN_WAIT_1: {
+            if (seg.seqNum != ackNum) break;
             bool isFinAck = (seg.flags & TCP_FLAG_FIN) && (seg.flags & TCP_FLAG_ACK);
             if (isFinAck) {
-                ackNum = seg.seqNum + 1;
+                ackNum += 1;
+                transitionTo(TCPState::CLOSED);
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-                transitionTo(TCPState::TIME_WAIT);
                 break;
             }
             if (seg.flags & TCP_FLAG_ACK) {
@@ -224,19 +232,21 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
                 transitionTo(TCPState::FIN_WAIT_2);
             }
             if (seg.flags & TCP_FLAG_FIN) {
-                ackNum = seg.seqNum + 1;
+                ackNum += 1;
+                transitionTo(TCPState::CLOSED);
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-                transitionTo(TCPState::TIME_WAIT);
                 break;
             }
             break;
         }
 
         case TCPState::FIN_WAIT_2: {
+            if (seg.seqNum != ackNum) break;
             if (seg.flags & TCP_FLAG_FIN) {
-                ackNum = seg.seqNum + 1;
+                ackNum += 1;
+                transitionTo(TCPState::CLOSED);
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-                transitionTo(TCPState::TIME_WAIT);
+                
             }
             break;
         }
@@ -248,17 +258,33 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
         }
 
         case TCPState::LAST_ACK: {
-            if (seg.flags & TCP_FLAG_ACK) {
-                transitionTo(TCPState::CLOSED);
+            if (seg.flags & TCP_FLAG_ACK){
+                if (seg.flags & TCP_FLAG_ACK) {
+                    transitionTo(TCPState::CLOSED);
+                }
             }
             break;
         }
 
         case TCPState::TIME_WAIT: {
+            if (seg.flags & TCP_FLAG_FIN) {
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+            }
             break;
         }
 
         default:
             break;
+    }
+}
+
+void TCPSocket::setState(TCPState newState) {
+    if (state != newState) {
+        std::string oldStateStr = stateToString(); 
+        state = newState;                          
+        std::string newStateStr = stateToString(); 
+        
+        std::cout << "[TCP Socket] State changed: " 
+                  << oldStateStr << " -> " << newStateStr << "\n";
     }
 }

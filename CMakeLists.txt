@@ -57,6 +57,11 @@ add_executable(test_layer3
 )
 target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 util)
 
+add_executable(test_layer4
+    tests/test_layer4.cpp
+)
+target_link_libraries(test_layer4 PRIVATE core layer2 layer3 layer4 util)
+
 add_executable(test_tcp
     tests/test_tcp.cpp
 )

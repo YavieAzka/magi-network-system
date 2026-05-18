@@ -53,6 +53,7 @@ public:
     void handleIncomingSegment(const TCPSegment& seg);
 
     std::string stateToString() const;
+    void setState(TCPState newState);
 
 protected:
     void transitionTo(TCPState newState);

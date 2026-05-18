@@ -6,10 +6,12 @@
 #include "layer3/ICMPMessage.hpp"
 #include "layer4/TCPSegment.hpp"
 #include "layer4/TCPSocket.hpp"
+#include "layer4/UDPSegment.hpp"
 #include "util/NetUtils.hpp"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
+#include <thread>
 using namespace std;
 
 Host::Host(const string &name, const string &ipCidr, const string &defaultGateway)
@@ -136,10 +138,12 @@ bool Host::ping(const string &targetIp, int count)
 
         if (icmpReplyReceived_)
         {
-            cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
-                 << ": seq=" << seq
-                 << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
-            ++received;
+            if (icmpReplyType_ == ICMP::TYPE_ECHO_REPLY) {
+                cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
+                     << ": seq=" << seq
+                     << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
+                ++received;
+            } 
         }
         else
         {
@@ -206,6 +210,18 @@ void Host::traceroute(const string &targetIp, int maxHops)
     }
     cout << "[" << getName() << "] Max hops tercapai.\n\n";
 }
+void Host::setIpAddress(const string& ipCidr) {
+    auto [ip, prefix] = NetUtils::parseCIDR(ipCidr);
+    ipRaw_ = ip;
+    prefix_ = prefix;
+    cout << "[" << getName() << "] IP telah dikonfigurasi ke " << getIpAddress() << "/" << (int)prefix_ << "\n";
+}
+
+void Host::setDefaultGateway(const string& gw) {
+    gatewayRaw_ = NetUtils::stringToIp(gw);
+    cout << "[" << getName() << "] Gateway telah dikonfigurasi ke " << getDefaultGateway() << "\n";
+}
+
 
 void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
 {
@@ -302,8 +318,12 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
         handleIcmpPacket(ipPkt.srcIP, ipPkt.payload);
 
     // added by yavie after implementing TCPSocket
-    else if (ipPkt.protocol == 6) // 6 = nomor protokol TCP
+    else if (ipPkt.protocol == 6){ // 6 = nomor protokol TCP
         handleTCPSegment(ipPkt.srcIP, ipPkt.payload);
+    }
+    else if (ipPkt.protocol == 17) {
+        handleUDPSegment(ipPkt.srcIP, ipPkt.payload);
+    }
 }
 
 void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpBytes)
@@ -339,18 +359,21 @@ void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpByte
         {
             icmpReplyReceived_ = true;
             icmpReplySrcIp_ = srcIp;
+            icmpReplyType_ = msg.getICMPType();
         }
     }
     else if (msg.getICMPType() == ICMP::TYPE_TIME_EXCEEDED)
     {
         icmpReplyReceived_ = true;
         icmpReplySrcIp_ = srcIp;
+        icmpReplyType_ = msg.getICMPType();
         cout << "[" << getName() << "] ICMP Time Exceeded dari " << srcIp << "\n";
     }
     else if (msg.getICMPType() == ICMP::TYPE_UNREACHABLE)
     {
         icmpReplyReceived_ = true;
         icmpReplySrcIp_ = srcIp;
+        icmpReplyType_ = msg.getICMPType();
         cout << "[" << getName() << "] ICMP Unreachable dari " << srcIp
              << " code=" << (int)msg.getCode() << "\n";
     }
@@ -379,4 +402,100 @@ void Host::handleTCPSegment(const string &srcIp, const vector<uint8_t> &tcpBytes
     socket->remoteIP = srcIp;
 
     socket->handleIncomingSegment(seg);
+}
+
+void Host::sendTCP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload) 
+{
+    sendLayer3Packet(targetIp, payload, 6);
+}
+
+void Host::sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload) 
+{
+    UDPSegment udp;
+    udp.srcPort = srcPort;
+    udp.dstPort = dstPort;
+    udp.length = 8 + payload.size(); 
+    udp.payload = payload;
+    udp.checksum = UDPSegment::calculateChecksum(getIpAddress(), targetIp, udp);
+    std::vector<uint8_t> udpBytes = udp.toBytes();
+    sendLayer3Packet(targetIp, udpBytes, 17);
+}
+
+void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes){
+    std::cout << "[" << getName() << "] Menerima segment UDP dari " << srcIp << " dengan ukuran " << udpBytes.size() << " bytes\n";
+}
+
+void Host::tcpConnect(const std::string& targetIp, uint16_t targetPort) 
+{
+    uint16_t localPort = 12345;
+    TCPSocket* socket = new TCPSocket(getIpAddress(), localPort, 
+        [this](const TCPSegment& seg, const std::string& dstIp, uint16_t dstPort) {
+            std::vector<uint8_t> tcpBytes = seg.toBytes();
+            this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+        }
+    );
+    
+    tcpSockets_[localPort] = socket;
+    std::cout << "[" << getName() << "] Memulai TCP Active Open ke " << targetIp << ":" << targetPort << "...\n";
+    
+    socket->activeOpen(targetIp, targetPort);
+    while (socket->state != TCPState::ESTABLISHED) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    std::cout << "[" << getName() << "] TCP Connection ESTABLISHED dengan " << targetIp << "!\n";
+}
+
+void Host::tcpListen(uint16_t port) {
+    TCPSocket* socket = new TCPSocket(getIpAddress(), port, 
+        [this](const TCPSegment& seg, const std::string& dstIp, uint16_t dstPort) {
+            std::vector<uint8_t> tcpBytes = seg.toBytes();
+            this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+        }
+    );
+    socket->passiveOpen();
+    tcpSockets_[port] = socket;
+    std::cout << "[" << getName() << "] Berhasil membuka port " << port << " (Status: LISTEN)\n";
+}
+
+void Host::tcpSend(uint16_t srcPort, const std::string& message) 
+{
+    auto it = tcpSockets_.find(srcPort);
+    if (it == tcpSockets_.end()) {
+        std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
+        return;
+    }
+
+    TCPSocket* socket = it->second;
+
+    if (socket->state != TCPState::ESTABLISHED) {
+        std::cout << "[ERR] Gagal kirim data. Socket port " << srcPort << " tidak dalam state ESTABLISHED.\n";
+        return;
+    }
+
+    std::vector<uint8_t> payload(message.begin(), message.end());
+
+    std::cout << "[" << getName() << "] Mengirim data (" << payload.size() << " bytes) via port " << srcPort << "...\n";
+    
+    socket->sendData(payload); 
+}
+
+void Host::tcpClose(uint16_t srcPort) 
+{
+    auto it = tcpSockets_.find(srcPort);
+    if (it == tcpSockets_.end()) {
+        std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
+        return;
+    }
+
+    TCPSocket* socket = it->second;
+
+    std::cout << "[" << getName() << "] Memicu 4-Way Teardown pada port " << srcPort << "...\n";
+    
+    socket->close(); 
+
+    while (socket->state != TCPState::CLOSED) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    std::cout << "[" << getName() << "] Socket port " << srcPort << " sekarang CLOSED.\n";
 }
