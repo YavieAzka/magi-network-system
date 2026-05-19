@@ -38,7 +38,7 @@ Socket API & Application Layer (L7) · 5 orang · C++
 
 ---
 
-## P3 — DNS + End-to-End Testing
+## P3 — DNS
 
 | Task | Deliverables |
 |------|-------------|
@@ -49,8 +49,6 @@ Socket API & Application Layer (L7) · 5 orang · C++
 | `DNSClient` class | `src/layer7/DNSClient.cpp` — expose fungsi `resolve(hostIp, domain) → string` yang bisa dipanggil HTTPClient |
 | Record loading | Opsional: load record dari field `"dns_records"` di topology JSON |
 | Integrasi ke HTTP flow | `DNSClient::resolve()` dipanggil di HTTPClient P5 saat URL berupa domain bukan IP |
-| **End-to-end testing** | Skenario lengkap: load topology → `dhcp_discover` → `http_server start` → `http_get www.nerv.com` lintas router |
-| **README update** | Dokumentasi cara run dan test semua perintah M4 |
 | Unit testing | Test resolve "www.magi.com" → "10.0.0.5", test domain tidak ditemukan |
 
 ---
@@ -70,7 +68,7 @@ Socket API & Application Layer (L7) · 5 orang · C++
 
 ---
 
-## P5 — HTTP Client & CLI
+## P5 — HTTP Client, CLI & End-to-End Testing
 
 | Task | Deliverables |
 |------|-------------|
@@ -80,6 +78,8 @@ Socket API & Application Layer (L7) · 5 orang · C++
 | HTTP GET flow | `connect(ip, 80)` → kirim `GET / HTTP/1.1\r\nHost: ...\r\n\r\n` → terima response → print body |
 | CLI integration | Tambah handler `H1 http_get <url>` di `cli.cpp` |
 | Unit testing | Test `http_get` ke IP langsung, test `http_get` ke domain lewat DNS |
+| **End-to-end testing** | Skenario lengkap: load topology → `dhcp_discover` → `http_server start` → `http_get www.nerv.com` lintas router, pastikan log tiap layer tercetak |
+| **README update** | Dokumentasi cara run dan test semua perintah M4 |
 
 ---
 
@@ -109,7 +109,7 @@ Socket API & Application Layer (L7) · 5 orang · C++
 
 ### Fase 3 — End-to-end & demo prep (semua merge)
 
-Semua merge, P3 memimpin end-to-end test: jalankan skenario demo lengkap lintas subnet, pastikan log tiap layer tercetak, fix bug bersama, P3 update README.
+Semua merge, **P5 memimpin** end-to-end test: jalankan skenario demo lengkap lintas subnet, pastikan log tiap layer tercetak, fix bug bersama, P5 update README.
 
 ---
 
@@ -122,11 +122,11 @@ P1 (MagiSocket)
     │         ↓                         │
     │    P3 bisa test                   │
     │         │                         │
-    ├── P3 (DNS + e2e testing) ─────────┤
+    ├── P3 (DNS) ───────────────────────┤
     │                                   │
     └── P4 (HTTP Server) ───────────────┤
                                         │
-                                   P5 (HTTP Client & CLI)
+                                   P5 (HTTP Client & CLI & e2e testing)
 ```
 
 | Orang | Bisa mulai | Blokir sampai |
@@ -135,4 +135,4 @@ P1 (MagiSocket)
 | P2 | Sekarang (logic + patch Host), test setelah P1 | P1 merge |
 | P3 | Sekarang (logic), test setelah P2 selesai patch | P1 merge + P2 selesai `udpSockets_` |
 | P4 | Sekarang (logic), test setelah P1 | P1 merge |
-| P5 | Sekarang (CLI stub) | P1 + P3 + P4 merge |
+| P5 | Sekarang (CLI stub), full test setelah semua merge | P1 + P3 + P4 merge |
