@@ -4,6 +4,9 @@
 #include "layer4/TCPSocket.hpp"
 #include <string>
 #include <cstdint>
+#include <map>
+
+class MagiSocket;
 
 class Host : public Node
 {
@@ -39,6 +42,10 @@ public:
     void tcpListen(uint16_t port);
     void tcpSend(uint16_t srcPort, const std::string& message);
     void tcpClose(uint16_t srcPort);
+
+    std::map<uint16_t, TCPSocket*>& getTcpSockets() { return tcpSockets_; }
+    std::map<uint16_t, MagiSocket*>& getUdpSockets() { return udpSockets_; }
+
 private:
     uint32_t ipRaw_;
     uint8_t prefix_;
@@ -53,6 +60,7 @@ private:
 
     // -- added by yavie after implementing TCP Socket:
     std::map<uint16_t, TCPSocket*> tcpSockets_; // port -> socket
+    std::map<uint16_t, MagiSocket*> udpSockets_;
     void handleTCPSegment(const std::string& srcIp,
                       const std::vector<uint8_t>& tcpBytes);
     bool isLocalNetwork(const std::string &destIp) const;

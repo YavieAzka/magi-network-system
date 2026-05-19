@@ -47,6 +47,12 @@ add_library(layer4
 target_include_directories(layer4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer4 PRIVATE util)
 
+add_library(layer7
+    src/layer7/MagiSocket.cpp
+)
+target_include_directories(layer7 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(layer7 PUBLIC core layer4 util)
+
 add_executable(test_switch
     tests/test_switch.cpp
 )
@@ -67,8 +73,13 @@ add_executable(test_tcp
 )
 target_link_libraries(test_tcp PRIVATE layer4 core util)
 
+add_executable(test_magisocket
+    tests/test_magisocket.cpp
+)
+target_link_libraries(test_magisocket PRIVATE core layer2 layer3 layer4 layer7 util)
+
 add_executable(jarkom
     src/cli.cpp
     src/main.cpp
 )
-target_link_libraries(jarkom PRIVATE core layer2 layer3 layer4  util)
+target_link_libraries(jarkom PRIVATE core layer2 layer3 layer4 layer7 util)

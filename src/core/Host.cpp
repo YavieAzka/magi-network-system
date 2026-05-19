@@ -8,6 +8,7 @@
 #include "layer4/TCPSocket.hpp"
 #include "layer4/UDPSegment.hpp"
 #include "util/NetUtils.hpp"
+#include "layer7/MagiSocket.hpp"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
@@ -421,10 +422,6 @@ void Host::sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPo
     sendLayer3Packet(targetIp, udpBytes, 17);
 }
 
-void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes){
-    std::cout << "[" << getName() << "] Menerima segment UDP dari " << srcIp << " dengan ukuran " << udpBytes.size() << " bytes\n";
-}
-
 void Host::tcpConnect(const std::string& targetIp, uint16_t targetPort) 
 {
     uint16_t localPort = 12345;
@@ -439,11 +436,36 @@ void Host::tcpConnect(const std::string& targetIp, uint16_t targetPort)
     std::cout << "[" << getName() << "] Memulai TCP Active Open ke " << targetIp << ":" << targetPort << "...\n";
     
     socket->activeOpen(targetIp, targetPort);
-    while (socket->state != TCPState::ESTABLISHED) {
+    
+    auto startTime = std::chrono::steady_clock::now();
+    bool isConnected = false;
+
+    while (true) {
+        if (socket->state == TCPState::ESTABLISHED) {
+            isConnected = true;
+            break;
+        }
+        if (socket->state == TCPState::CLOSED) {
+            std::cout << "[" << getName() << "] tcpConnect gagal: Koneksi ditolak atau ditutup (status CLOSED).\n";
+            break;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 2000) {
+            std::cout << "[" << getName() << "] tcpConnect gagal: Timeout 2 detik tercapai.\n";
+            break;
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
-    std::cout << "[" << getName() << "] TCP Connection ESTABLISHED dengan " << targetIp << "!\n";
+    if (isConnected) {
+        std::cout << "[" << getName() << "] TCP Connection ESTABLISHED dengan " << targetIp << "!\n";
+    } else {
+        socket->close();
+        tcpSockets_.erase(localPort);
+        delete socket;
+    }
 }
 
 void Host::tcpListen(uint16_t port) {
@@ -494,8 +516,36 @@ void Host::tcpClose(uint16_t srcPort)
     
     socket->close(); 
 
+    auto closeStart = std::chrono::steady_clock::now();
     while (socket->state != TCPState::CLOSED) {
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - closeStart).count() >= 3000) {
+            std::cout << "[" << getName() << "] tcpClose timeout, socket di-force close.\n";
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     std::cout << "[" << getName() << "] Socket port " << srcPort << " sekarang CLOSED.\n";
+}
+
+void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes) {
+    UDPSegment seg;
+    try {
+        seg = UDPSegment::deserialize(udpBytes);
+    } catch (const std::exception& e) {
+        std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: " << e.what() << "\n";
+        return;
+    } catch (...) {
+        std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: Error tidak dikenal.\n";
+        return;
+    }
+    std::cout << "[" << getName() << "] Menerima segment UDP dari " << srcIp << " dengan ukuran " << udpBytes.size() << " bytes\n";
+
+    auto it = udpSockets_.find(seg.dstPort);
+    if (it != udpSockets_.end()) {
+        it->second->pushUdpData(seg.payload);
+    } else {
+        std::cout << "[" << getName() << "] Tidak ada UDP socket di port " 
+                  << seg.dstPort << ", paket didrop.\n";
+    }
 }
