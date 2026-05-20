@@ -1,8 +1,12 @@
 #pragma once
 #include "core/Node.hpp"
 #include "layer2/ARP.hpp"
+#include "layer4/TCPSocket.hpp"
 #include <string>
 #include <cstdint>
+#include <map>
+
+class MagiSocket;
 
 class Host : public Node
 {
@@ -32,19 +36,33 @@ public:
                        const std::vector<uint8_t> &rawBytes) override;
     void setIpAddress(const std::string &ipCidr);
     void setDefaultGateway(const std::string &gw);
+    void sendTCP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload);
+    void sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload);
+    void tcpConnect(const std::string& targetIp, uint16_t targetPort);
+    void tcpListen(uint16_t port);
+    void tcpSend(uint16_t srcPort, const std::string& message);
+    void tcpClose(uint16_t srcPort);
+
+    std::map<uint16_t, TCPSocket*>& getTcpSockets() { return tcpSockets_; }
+    std::map<uint16_t, MagiSocket*>& getUdpSockets() { return udpSockets_; }
 
 private:
     uint32_t ipRaw_;
     uint8_t prefix_;
     uint32_t gatewayRaw_;
     ARPCache arpCache_;
-
+    
     bool icmpReplyReceived_ = false;
     std::string icmpReplySrcIp_;
     uint16_t pendingIdentifier_ = 0;
     uint16_t pendingSeq_ = 0;
     uint8_t icmpReplyType_ = 0;
 
+    // -- added by yavie after implementing TCP Socket:
+    std::map<uint16_t, TCPSocket*> tcpSockets_; // port -> socket
+    std::map<uint16_t, MagiSocket*> udpSockets_;
+    void handleTCPSegment(const std::string& srcIp,
+                      const std::vector<uint8_t>& tcpBytes);
     bool isLocalNetwork(const std::string &destIp) const;
     void sendEthernet(const std::string &destMac,
                       uint16_t etherType,
@@ -55,4 +73,6 @@ private:
                           const std::vector<uint8_t> &ipBytes);
     void handleIcmpPacket(const std::string &srcIp,
                           const std::vector<uint8_t> &icmpBytes);
+    void handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes);
+    
 };

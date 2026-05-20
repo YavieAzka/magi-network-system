@@ -2,7 +2,6 @@
 #define CLI_HPP
 
 #include "core/Simulator.hpp"
-#
 
 #include <string>
 #include <vector>

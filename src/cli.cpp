@@ -175,14 +175,29 @@ void CLI::handleTopology(const vector<string> &)
 void CLI::handleHelp(const vector<string> &)
 {
     cout << "\nDaftar Perintah:\n"
-            "  create <host|switch|router> <nama>  Buat node baru\n"
-            "  link   <ep1> <ep2> [delay_ms]       Sambungkan dua node\n"
-            "  unlink <ep1> <ep2>                  Putuskan kabel\n"
-            "  topology                            Tampilkan state di memori\n"
-            "  save   [file.json]                  Ekspor ke JSON\n"
-            "  load   <file.json>                  Impor dari JSON\n"
-            "  help                                Daftar perintah ini\n"
-            "  exit / quit                         Keluar\n"
+            "  create   <host|switch|router> <nama>        Buat node baru\n"
+            "  link     <ep1> <ep2> [delay_ms]             Sambungkan dua node\n"
+            "  unlink   <ep1> <ep2>                        Putuskan kabel\n"
+            "  topology                                    Tampilkan state di memori\n"
+            "  save     [file.json]                        Ekspor ke JSON\n"
+            "  load     <file.json>                        Impor dari JSON\n"
+            "  help                                        Daftar perintah ini\n"
+            "  exit / quit                                 Keluar\n"
+            "  <host>   set-ip <IP/CIDR>                   Set IP host\n"
+            "  <host>   set-gw <IP>                        Set gateway host\n"
+            "  <host>   ping <IP> [count]                  Kirim ICMP ping\n"
+            "  <host>   traceroute <IP>                    Lacak rute hop L3\n"
+            "  <host>   arp                                Tampilkan ARP cache host\n"
+            "  <host>   udp_send <dIP> <dPort> <sPort> <m> Kirim datagram UDP\n"
+            "  <host>   tcp_listen <port>                  Buka port TCP LISTEN\n"
+            "  <host>   tcp_connect <IP> <port>            Inisiasi TCP Handshake\n"
+            "  <host>   tcp_send <port> <msg>              Kirim data TCP PSH|ACK\n"
+            "  <host>   tcp_close <port>                   Inisiasi TCP Teardown\n"
+            "  <router> set-ip <port> <IP/CIDR>            Set IP port router\n"
+            "  <router> ip route <net> <hop> <port>        Tambah static route\n"
+            "  <router> route                              Tampilkan routing table\n"
+            "  <router> arp                                Tampilkan ARP cache router\n"
+            "  <switch> mac / mactable                     Tampilkan MAC table\n"
             "\nFormat endpoint: NamaNode  atau  NamaNode:NomorPort\n"
             "  Contoh: link H1 SW1:3 10\n\n";
 }
@@ -232,6 +247,36 @@ bool CLI::processCommand(const string &line)
             int count = (args.size() >= 4) ? stoi(args[3]) : 4;
             host->ping(args[2], count);
         }
+        else if (args.size() >= 4 && args[1] == "tcp_connect")
+        {
+            if (host) {
+                string destIp = args[2];
+                uint16_t destPort = stoi(args[3]);
+                host->tcpConnect(destIp, destPort);
+                ok("Memicu tcpConnect ke " + destIp + ":" + to_string(destPort));
+            } else {
+                err("Hanya host yang bisa melakukan tcp_connect.");
+            }
+        }
+        else if (args.size() >= 6 && args[1] == "udp_send")
+        {
+            if (host) {
+                string destIp = args[2];
+                uint16_t destPort = stoi(args[3]);
+                uint16_t srcPort = stoi(args[4]);
+                string message = args[5];
+                for (size_t i = 6; i < args.size(); ++i) {
+                    message += " " + args[i];
+                }
+                
+                vector<uint8_t> payload(message.begin(), message.end());
+                host->sendUDP(destIp, destPort, srcPort, payload);
+                ok("Datagram UDP terkirim dari " + host->getName());
+            } else {
+                err("Hanya host yang bisa melakukan udp_send.");
+            }
+        }
+
         else if (args.size() >= 3 && args[1] == "set-ip")
         {
             if (host) {
@@ -293,6 +338,41 @@ bool CLI::processCommand(const string &line)
                 return true;
             }
             sw->printMACTable();
+        }
+        else if (args.size() >= 3 && args[1] == "tcp_listen")
+        {
+            if (host) {
+                uint16_t port = stoi(args[2]);
+                host->tcpListen(port); 
+                ok("Host " + host->getName() + " sekarang LISTEN di port " + to_string(port));
+            } else {
+                err("Hanya host yang bisa listen port TCP.");
+            }
+        }
+        else if (args.size() >= 4 && args[1] == "tcp_send")
+        {
+            if (host) {
+                uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
+                string message = args[3];
+                for (size_t i = 4; i < args.size(); ++i) {
+                    message += " " + args[i];
+                }
+                
+                host->tcpSend(srcPort, message);
+                ok("Perintah tcp_send dieksekusi.");
+            } else {
+                err("Hanya host yang bisa melakukan tcp_send.");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "tcp_close")
+        {
+            if (host) {
+                uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
+                host->tcpClose(srcPort);
+                ok("Koneksi pada port " + to_string(srcPort) + " ditutup.");
+            } else {
+                err("Hanya host yang bisa melakukan tcp_close.");
+            }
         }
         else
         {
