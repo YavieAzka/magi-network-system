@@ -42,6 +42,7 @@ public:
     void tcpListen(uint16_t port);
     void tcpSend(uint16_t srcPort, const std::string& message);
     void tcpClose(uint16_t srcPort);
+    void sendUDPBroadcast(uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload);
 
     std::map<uint16_t, TCPSocket*>& getTcpSockets() { return tcpSockets_; }
     std::map<uint16_t, MagiSocket*>& getUdpSockets() { return udpSockets_; }

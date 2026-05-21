@@ -196,4 +196,7 @@ std::vector<uint8_t> MagiSocket::recv(size_t max_bytes) {
 void MagiSocket::pushUdpData(const std::vector<uint8_t>& data) {
     udpReceiveBuffer_.insert(udpReceiveBuffer_.end(), data.begin(), data.end());
     std::cout << "[MagiSocket] UDP buffer menerima " << data.size() << " bytes tambahan.\n";
+    if (onReceive_) {
+        onReceive_(data);
+    }
 }

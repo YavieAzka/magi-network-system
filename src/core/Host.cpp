@@ -226,6 +226,7 @@ void Host::setDefaultGateway(const string& gw) {
 
 void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
 {
+    //std::cout << "[DEBUG handleReceive " << getName() << "] " << rawBytes.size() << " bytes masuk\n";
     if (!isActive())
         return;
 
@@ -303,14 +304,17 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
     {
         return;
     }
+    // std::cout << "[DEBUG handleIPv4 " << getName() << "] "
+    //           << "src=" << ipPkt.srcIP << " dst=" << ipPkt.dstIP
+    //           << " proto=" << (int)ipPkt.protocol << "\n";
 
     if (!ipPkt.verifyChecksum())
     {
         cout << "[" << getName() << "] IPv4 checksum invalid, drop\n";
         return;
-    }
-    if (ipPkt.dstIP != getIpAddress())
-        return;
+    }   
+    if (ipPkt.dstIP != getIpAddress() && ipPkt.dstIP != "255.255.255.255")
+        return; 
 
     cout << "[" << getName() << "] IPv4 diterima dari " << ipPkt.srcIP
          << " proto=" << (int)ipPkt.protocol << "\n";
@@ -419,6 +423,11 @@ void Host::sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPo
     udp.payload = payload;
     udp.checksum = UDPSegment::calculateChecksum(getIpAddress(), targetIp, udp);
     std::vector<uint8_t> udpBytes = udp.toBytes();
+    if (targetIp == "255.255.255.255") {
+        IPv4Packet ipPkt(getIpAddress(), targetIp, 17, 64, udpBytes);
+        sendEthernet("FF:FF:FF:FF:FF:FF", 0x0800, ipPkt.toBytes());
+        return;
+    }
     sendLayer3Packet(targetIp, udpBytes, 17);
 }
 
@@ -539,6 +548,12 @@ void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>
         std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: Error tidak dikenal.\n";
         return;
     }
+    // std::cout << "[DEBUG handleUDPSegment " << getName() << "] "
+    //           << "dstPort=" << seg.dstPort
+    //           << " udpSockets_.size()=" << udpSockets_.size() << "\n";
+    // for (const auto& [port, sock] : udpSockets_) {
+    //     std::cout << "[DEBUG] terdaftar port=" << port << "\n";
+    // }
     std::cout << "[" << getName() << "] Menerima segment UDP dari " << srcIp << " dengan ukuran " << udpBytes.size() << " bytes\n";
 
     auto it = udpSockets_.find(seg.dstPort);
@@ -547,5 +562,29 @@ void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>
     } else {
         std::cout << "[" << getName() << "] Tidak ada UDP socket di port " 
                   << seg.dstPort << ", paket didrop.\n";
+    }
+}
+
+void Host::sendUDPBroadcast(uint16_t srcPort, uint16_t dstPort,
+                             const std::vector<uint8_t>& payload) {
+    UDPSegment udp;
+    udp.srcPort  = srcPort;
+    udp.dstPort  = dstPort;
+    udp.length   = 8 + payload.size();
+    udp.payload  = payload;
+    udp.checksum = UDPSegment::calculateChecksum(getIpAddress(), 
+                                                  "255.255.255.255", udp);
+    std::vector<uint8_t> udpBytes = udp.toBytes();
+    IPv4Packet ipPkt(getIpAddress(), "255.255.255.255", 17, 64, udpBytes);
+    std::vector<uint8_t> ipBytes = ipPkt.toBytes();
+
+    // Kirim ke semua interface yang terhubung
+    for (int port = 1; port <= 48; ++port) {
+        Interface* ifc = getInterface(port);
+        if (ifc && ifc->isConnected()) {
+            EthernetFrame frame("FF:FF:FF:FF:FF:FF", ifc->getMacAddress(), 
+                                0x0800, ipBytes);
+            ifc->send(frame.toBytes());
+        }
     }
 }

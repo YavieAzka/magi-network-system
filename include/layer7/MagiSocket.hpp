@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <functional>
 
 class Host;
 class TCPSocket;
@@ -39,6 +40,8 @@ private:
                const std::string& remoteIp,
                uint16_t           remotePort,
                TCPSocket*         existingSocket);
+
+    std::function<void(const std::vector<uint8_t>&)> onReceive_;
 public:
     explicit MagiSocket(Host* host,
                         int   sock_type,
@@ -68,4 +71,7 @@ public:
     uint16_t getRemotePort() const { return remotePort_; }
     TCPSocket* getTcpSocket() const { return tcpSocket_; }
     void pushUdpData(const std::vector<uint8_t>& data);
+    void setOnReceive(std::function<void(const std::vector<uint8_t>&)> cb) {
+        onReceive_ = cb;
+    }
 };

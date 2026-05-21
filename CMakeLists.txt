@@ -49,6 +49,9 @@ target_link_libraries(layer4 PRIVATE util)
 
 add_library(layer7
     src/layer7/MagiSocket.cpp
+    src/layer7/DHCPMessage.cpp
+    src/layer7/DHCPServer.cpp
+    src/layer7/DHCPClient.cpp
 )
 target_include_directories(layer7 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer7 PUBLIC core layer4 util)
@@ -61,12 +64,17 @@ target_link_libraries(test_switch PRIVATE layer2 core util)
 add_executable(test_layer3
     tests/test_layer3.cpp
 )
-target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 util)
+target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 layer7 util)
 
 add_executable(test_layer4
     tests/test_layer4.cpp
 )
-target_link_libraries(test_layer4 PRIVATE core layer2 layer3 layer4 util)
+target_link_libraries(test_layer4 PRIVATE core layer2 layer3 layer4 layer7 util)
+
+add_executable(test_dhcp
+    tests/test_dhcp.cpp
+)
+target_link_libraries(test_dhcp PRIVATE core layer2 layer3 layer4 layer7 util)
 
 add_executable(test_tcp
     tests/test_tcp.cpp
