@@ -5,8 +5,13 @@
 #include <string>
 #include <cstdint>
 #include <map>
+#include <functional>
 
 class MagiSocket;
+
+struct HTTPRequest;
+struct HTTPResponse;
+using HTTPHandler = std::function<HTTPResponse(const HTTPRequest&)>;
 
 class Host : public Node
 {
@@ -47,6 +52,10 @@ public:
     std::map<uint16_t, TCPSocket*>& getTcpSockets() { return tcpSockets_; }
     std::map<uint16_t, MagiSocket*>& getUdpSockets() { return udpSockets_; }
 
+    void startHTTPServer(uint16_t port, HTTPHandler handler);
+    void startHTTPServer(uint16_t port, const std::string &webRoot = "");
+    void httpGet(const std::string &serverIp, uint16_t serverPort, const std::string &path);
+
 private:
     uint32_t ipRaw_;
     uint8_t prefix_;
@@ -59,9 +68,11 @@ private:
     uint16_t pendingSeq_ = 0;
     uint8_t icmpReplyType_ = 0;
 
-    // -- added by yavie after implementing TCP Socket:
-    std::map<uint16_t, TCPSocket*> tcpSockets_; // port -> socket
+    std::map<uint16_t, TCPSocket*> tcpSockets_;
     std::map<uint16_t, MagiSocket*> udpSockets_;
+
+    std::map<uint16_t, HTTPHandler> httpHandlers_;
+
     void handleTCPSegment(const std::string& srcIp,
                       const std::vector<uint8_t>& tcpBytes);
     bool isLocalNetwork(const std::string &destIp) const;
@@ -75,5 +86,6 @@ private:
     void handleIcmpPacket(const std::string &srcIp,
                           const std::vector<uint8_t> &icmpBytes);
     void handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes);
+    void processHTTPRequest(uint16_t port);
     
 };

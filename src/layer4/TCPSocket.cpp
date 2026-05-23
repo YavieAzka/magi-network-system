@@ -183,7 +183,10 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
         }
 
         case TCPState::ESTABLISHED: {
-            if (seg.seqNum != ackNum) {
+            if (seg.flags & TCP_FLAG_FIN) {
+                ackNum = seg.seqNum + 1;
+                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::CLOSE_WAIT);
                 break;
             }
 
@@ -204,25 +207,15 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
                           << " bytes, buffer size: " << receiveBuffer.size() << "\n";
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
             }
-            if (seg.flags & TCP_FLAG_FIN) {
-                ackNum += 1;
-                transitionTo(TCPState::CLOSE_WAIT);
-                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-
-                seqNum += 1;
-                transitionTo(TCPState::LAST_ACK);
-                sendSegment(TCP_FLAG_FIN | TCP_FLAG_ACK, seqNum-1, ackNum);
-            }
             break;
         }
 
         case TCPState::FIN_WAIT_1: {
-            if (seg.seqNum != ackNum) break;
             bool isFinAck = (seg.flags & TCP_FLAG_FIN) && (seg.flags & TCP_FLAG_ACK);
             if (isFinAck) {
-                ackNum += 1;
-                transitionTo(TCPState::CLOSED);
+                ackNum = seg.seqNum + 1;
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::TIME_WAIT);
                 break;
             }
             if (seg.flags & TCP_FLAG_ACK) {
@@ -232,44 +225,35 @@ void TCPSocket::handleIncomingSegment(const TCPSegment& seg) {
                 transitionTo(TCPState::FIN_WAIT_2);
             }
             if (seg.flags & TCP_FLAG_FIN) {
-                ackNum += 1;
-                transitionTo(TCPState::CLOSED);
+                ackNum = seg.seqNum + 1;
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
+                transitionTo(TCPState::TIME_WAIT);
                 break;
             }
             break;
         }
 
         case TCPState::FIN_WAIT_2: {
-            if (seg.seqNum != ackNum) break;
             if (seg.flags & TCP_FLAG_FIN) {
-                ackNum += 1;
-                transitionTo(TCPState::CLOSED);
+                ackNum = seg.seqNum + 1;
                 sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-                
+                transitionTo(TCPState::TIME_WAIT);
             }
             break;
         }
 
         case TCPState::CLOSE_WAIT: {
-            if (seg.flags & TCP_FLAG_ACK) {
-            }
             break;
         }
 
         case TCPState::LAST_ACK: {
-            if (seg.flags & TCP_FLAG_ACK){
-                if (seg.flags & TCP_FLAG_ACK) {
-                    transitionTo(TCPState::CLOSED);
-                }
+            if (seg.flags & TCP_FLAG_ACK) {
+                transitionTo(TCPState::CLOSED);
             }
             break;
         }
 
         case TCPState::TIME_WAIT: {
-            if (seg.flags & TCP_FLAG_FIN) {
-                sendSegment(TCP_FLAG_ACK, seqNum, ackNum);
-            }
             break;
         }
 

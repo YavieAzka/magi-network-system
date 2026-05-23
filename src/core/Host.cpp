@@ -7,12 +7,14 @@
 #include "layer4/TCPSegment.hpp"
 #include "layer4/TCPSocket.hpp"
 #include "layer4/UDPSegment.hpp"
+#include "layer7/HTTPMessage.hpp"
 #include "util/NetUtils.hpp"
 #include "layer7/MagiSocket.hpp"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
 #include <thread>
+#include <fstream>
 using namespace std;
 
 Host::Host(const string &name, const string &ipCidr, const string &defaultGateway)
@@ -389,24 +391,89 @@ void Host::handleTCPSegment(const string &srcIp, const vector<uint8_t> &tcpBytes
     TCPSegment seg;
     try { seg = TCPSegment::deserialize(tcpBytes); }
     catch (const exception &e) {
-        cerr << "[" << getName() << "] Gagal parse TCPSegment: " << e.what() << "\n";
+        cerr << "[" << getName() << "] Failed to parse TCPSegment: " << e.what() << "\n";
         return;
     }
 
-    // Cari socket yang mendengarkan di destination port ini
     auto it = tcpSockets_.find(seg.dstPort);
     if (it == tcpSockets_.end()) {
-        cout << "[" << getName() << "] Tidak ada socket di port "
+        cout << "[" << getName() << "] No socket on port "
              << seg.dstPort << ", drop\n";
         return;
     }
 
     TCPSocket* socket = it->second;
-
-    // Beri tahu socket siapa pengirimnya — inilah yang dimaksud sebelumnya
     socket->remoteIP = srcIp;
-
     socket->handleIncomingSegment(seg);
+
+    // Check if an HTTP handler is registered for this port
+    processHTTPRequest(seg.dstPort);
+}
+
+void Host::processHTTPRequest(uint16_t port)
+{
+    auto sockIt = tcpSockets_.find(port);
+    if (sockIt == tcpSockets_.end())
+        return;
+
+    TCPSocket *socket = sockIt->second;
+    if (socket->state != TCPState::ESTABLISHED)
+        return;
+
+    auto handlerIt = httpHandlers_.find(port);
+    if (handlerIt == httpHandlers_.end())
+        return;
+
+    vector<uint8_t> data = socket->recvData();
+    if (data.empty())
+        return;
+
+    string raw(data.begin(), data.end());
+    size_t headerEnd = raw.find("\r\n\r\n");
+    if (headerEnd == string::npos)
+        return;
+
+    HTTPRequest req = HTTPRequest::deserialize(raw);
+    if (req.method.empty())
+        return;
+
+    cout << "[" << getName() << ":http] Received " << req.method << " "
+         << req.path << " from " << socket->remoteIP << "\n";
+
+    HTTPResponse resp = handlerIt->second(req);
+
+    string serialized = resp.serialize();
+    vector<uint8_t> payload(serialized.begin(), serialized.end());
+    socket->sendData(payload);
+
+    cout << "[" << getName() << ":http] Sent " << resp.statusCode << " "
+         << resp.reasonPhrase << " (" << payload.size() << " bytes)\n";
+
+    socket->close();
+
+    auto closeStart = chrono::steady_clock::now();
+    while (socket->state != TCPState::CLOSED)
+    {
+        if (chrono::duration_cast<chrono::milliseconds>(
+                chrono::steady_clock::now() - closeStart).count() >= 3000)
+        {
+            cout << "[" << getName() << ":http] Close timeout on port " << port << "\n";
+            break;
+        }
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    tcpSockets_.erase(port);
+    delete socket;
+
+    TCPSocket *newSocket = new TCPSocket(getIpAddress(), port,
+        [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort) {
+            vector<uint8_t> tcpBytes = seg.toBytes();
+            sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+        });
+    newSocket->passiveOpen();
+    tcpSockets_[port] = newSocket;
+    cout << "[" << getName() << ":http] Re-listening on port " << port << "\n";
 }
 
 void Host::sendTCP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload) 
@@ -563,6 +630,153 @@ void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>
         std::cout << "[" << getName() << "] Tidak ada UDP socket di port " 
                   << seg.dstPort << ", paket didrop.\n";
     }
+}
+
+void Host::startHTTPServer(uint16_t port, HTTPHandler handler)
+{
+    httpHandlers_[port] = handler;
+    tcpListen(port);
+    cout << "[" << getName() << ":http] HTTP server started on port " << port << "\n";
+}
+
+void Host::startHTTPServer(uint16_t port, const string &webRoot)
+{
+    auto fileHandler = [webRoot](const HTTPRequest &req) -> HTTPResponse
+    {
+        if (req.method != "GET")
+            return HTTPResponse::make400("Method Not Allowed");
+
+        string filePath = webRoot + req.path;
+        if (filePath.empty() || filePath.back() == '/')
+            filePath += "index.html";
+
+        ifstream file(filePath);
+        if (!file.is_open())
+            return HTTPResponse::make404();
+
+        ostringstream content;
+        content << file.rdbuf();
+        file.close();
+
+        string ext;
+        size_t dot = filePath.rfind('.');
+        if (dot != string::npos)
+            ext = filePath.substr(dot + 1);
+
+        string contentType = "text/html";
+        if (ext == "txt") contentType = "text/plain";
+        else if (ext == "json") contentType = "application/json";
+        else if (ext == "css") contentType = "text/css";
+        else if (ext == "js") contentType = "application/javascript";
+
+        return HTTPResponse::make200(contentType, content.str());
+    };
+
+    startHTTPServer(port, fileHandler);
+}
+
+void Host::httpGet(const string &serverIp, uint16_t serverPort, const string &path)
+{
+    uint16_t localPort = 49152;
+    while (tcpSockets_.find(localPort) != tcpSockets_.end())
+        localPort++;
+
+    TCPSocket *clientSocket = new TCPSocket(getIpAddress(), localPort,
+        [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort)
+        {
+            vector<uint8_t> tcpBytes = seg.toBytes();
+            sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+        });
+
+    tcpSockets_[localPort] = clientSocket;
+
+    cout << "[" << getName() << ":http] Connecting to " << serverIp << ":" << serverPort << "...\n";
+    clientSocket->activeOpen(serverIp, serverPort);
+
+    auto startTime = chrono::steady_clock::now();
+    while (clientSocket->state != TCPState::ESTABLISHED)
+    {
+        if (clientSocket->state == TCPState::CLOSED)
+        {
+            cout << "[" << getName() << ":http] Connection failed\n";
+            tcpSockets_.erase(localPort);
+            delete clientSocket;
+            return;
+        }
+        auto now = chrono::steady_clock::now();
+        if (chrono::duration_cast<chrono::milliseconds>(now - startTime).count() >= 5000)
+        {
+            cout << "[" << getName() << ":http] Connection timeout\n";
+            tcpSockets_.erase(localPort);
+            delete clientSocket;
+            return;
+        }
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    HTTPRequest req;
+    req.method = "GET";
+    req.path = path;
+    req.version = "HTTP/1.1";
+    req.headers["Host"] = serverIp;
+    req.headers["Connection"] = "close";
+    req.headers["User-Agent"] = "MagiHTTP/1.0";
+
+    string serialized = req.serialize();
+    vector<uint8_t> payload(serialized.begin(), serialized.end());
+    clientSocket->sendData(payload);
+
+    cout << "[" << getName() << ":http] Sent GET " << path
+         << " to " << serverIp << ":" << serverPort << "\n";
+
+    startTime = chrono::steady_clock::now();
+    while (true)
+    {
+        auto data = clientSocket->recvData();
+        if (!data.empty())
+        {
+            string raw(data.begin(), data.end());
+            HTTPResponse resp = HTTPResponse::deserialize(raw);
+            cout << "[" << getName() << ":http] Received "
+                 << resp.statusCode << " " << resp.reasonPhrase << "\n";
+            if (!resp.body.empty())
+                cout << "[" << getName() << ":http] Body:\n" << resp.body << "\n";
+            break;
+        }
+
+        if (clientSocket->state == TCPState::CLOSE_WAIT ||
+            clientSocket->state == TCPState::TIME_WAIT ||
+            clientSocket->state == TCPState::CLOSED)
+        {
+            data = clientSocket->recvData();
+            if (!data.empty())
+            {
+                string raw(data.begin(), data.end());
+                HTTPResponse resp = HTTPResponse::deserialize(raw);
+                cout << "[" << getName() << ":http] Received "
+                     << resp.statusCode << " " << resp.reasonPhrase << "\n";
+                if (!resp.body.empty())
+                    cout << "[" << getName() << ":http] Body:\n" << resp.body << "\n";
+            }
+            else
+            {
+                cout << "[" << getName() << ":http] Connection closed by server, no data received\n";
+            }
+            break;
+        }
+
+        auto now = chrono::steady_clock::now();
+        if (chrono::duration_cast<chrono::milliseconds>(now - startTime).count() >= 5000)
+        {
+            cout << "[" << getName() << ":http] Response timeout\n";
+            break;
+        }
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    clientSocket->close();
+    tcpSockets_.erase(localPort);
+    delete clientSocket;
 }
 
 void Host::sendUDPBroadcast(uint16_t srcPort, uint16_t dstPort,
