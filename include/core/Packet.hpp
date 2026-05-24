@@ -24,7 +24,7 @@ namespace ByteUtils
     // Membaca uint16_t dari buffer dalam Big-endian Order
     inline uint16_t read_u16_be(const vector<uint8_t> &buf, size_t offset)
     {
-        if (offset + 1 >= buf.size())
+        if (offset + 2 >= buf.size())
             throw out_of_range("Buffer too smal for u16");
         return (static_cast<uint16_t>(buf[offset]) << 8 | buf[offset + 1]);
     }
@@ -41,7 +41,7 @@ namespace ByteUtils
     // Membaca uint32_t dari buffer dalam Big-endian Order
     inline uint32_t read_u32_be(const vector<uint8_t> &buf, size_t offset)
     {
-        if (offset + 3 >= buf.size())
+        if (offset + 4 >= buf.size())
             throw std::out_of_range("Buffer too small for u32");
         return (static_cast<uint32_t>(buf[offset]) << 24) | (static_cast<uint32_t>(buf[offset + 1]) << 16) | (static_cast<uint32_t>(buf[offset + 2]) << 8) | static_cast<uint32_t>(buf[offset + 3]);
     }

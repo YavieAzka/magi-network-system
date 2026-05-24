@@ -59,7 +59,7 @@ vector<uint8_t> EthernetFrame::toBytes() const
 
 void EthernetFrame::deserialize(const vector<uint8_t> &raw)
 {
-    if (raw.size() < 18)
+    if (raw.size() < 18 || (vlanId >= 0 && raw.size() < 22))
         throw runtime_error("Error: Frame too short");
 
     size_t pos = 0;
