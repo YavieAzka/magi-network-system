@@ -95,112 +95,20 @@ void HTTPServer::sendResponse(HTTPResponse &resp)
               << " (" << payload.size() << " bytes)\n";
 }
 
-HTTPClient::HTTPClient(Host &host)
-    : host_(host), socket_(nullptr), responseReady_(false)
-{
-}
-
-HTTPResponse HTTPClient::get(const std::string &serverIp, uint16_t serverPort, const std::string &path)
-{
-    responseReady_ = false;
-    uint16_t localPort = 49152;
-
-    while (host_.getTcpSockets().find(localPort) != host_.getTcpSockets().end())
-        localPort++;
-
-    socket_ = new TCPSocket(host_.getIpAddress(), localPort,
-        [this](const TCPSegment &seg, const std::string &dstIp, uint16_t dstPort)
-        {
-            std::vector<uint8_t> tcpBytes = seg.toBytes();
-            host_.sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
-        });
-
-    host_.getTcpSockets()[localPort] = socket_;
-
-    socket_->activeOpen(serverIp, serverPort);
-
-    auto startTime = std::chrono::steady_clock::now();
-    while (socket_->state != TCPState::ESTABLISHED)
-    {
-        if (socket_->state == TCPState::CLOSED)
-        {
-            std::cout << "[HTTPClient " << host_.getName() << "] Connection failed\n";
-            return HTTPResponse::make400("Connection Failed");
-        }
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 5000)
-        {
-            std::cout << "[HTTPClient " << host_.getName() << "] Connection timeout\n";
-            return HTTPResponse::make400("Connection Timeout");
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
+void HTTPServer::serveOne() {
+    if (!socket_ || socket_->state == TCPState::CLOSED) return;
+    
+    // Baca request dari buffer
+    auto data = socket_->recvData();
+    if (data.empty()) return;
+    
     HTTPRequest req;
-    req.method = "GET";
-    req.path = path;
-    req.version = "HTTP/1.1";
-    req.headers["Host"] = serverIp;
-    req.headers["Connection"] = "close";
-    req.headers["User-Agent"] = "MagiHTTP/1.0";
-
-    std::string serialized = req.serialize();
-    std::vector<uint8_t> payload(serialized.begin(), serialized.end());
-    socket_->sendData(payload);
-
-    std::cout << "[HTTPClient " << host_.getName() << "] Sent GET " << path
-              << " to " << serverIp << ":" << serverPort << "\n";
-
-    startTime = std::chrono::steady_clock::now();
-    while (true)
-    {
-        auto data = socket_->recvData();
-        if (!data.empty())
-        {
-            std::string raw(data.begin(), data.end());
-            HTTPResponse resp = HTTPResponse::deserialize(raw);
-            lastResponse_ = resp;
-            responseReady_ = true;
-            std::cout << "[HTTPClient " << host_.getName() << "] Received "
-                      << resp.statusCode << " " << resp.reasonPhrase << "\n";
-            return resp;
-        }
-
-        if (socket_->state == TCPState::CLOSE_WAIT ||
-            socket_->state == TCPState::TIME_WAIT ||
-            socket_->state == TCPState::CLOSED)
-        {
-            data = socket_->recvData();
-            if (!data.empty())
-            {
-                std::string raw(data.begin(), data.end());
-                lastResponse_ = HTTPResponse::deserialize(raw);
-                responseReady_ = true;
-                return lastResponse_;
-            }
-            std::cout << "[HTTPClient " << host_.getName() << "] Connection closed by server\n";
-            return HTTPResponse::make400("Connection Closed");
-        }
-
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 5000)
-        {
-            std::cout << "[HTTPClient " << host_.getName() << "] Response timeout\n";
-            data = socket_->recvData();
-            if (!data.empty())
-            {
-                std::string raw(data.begin(), data.end());
-                lastResponse_ = HTTPResponse::deserialize(raw);
-                responseReady_ = true;
-                return lastResponse_;
-            }
-            return HTTPResponse::make400("Response Timeout");
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-}
-
-void HTTPClient::getAsync(const std::string &serverIp, uint16_t serverPort, const std::string &path)
-{
-    HTTPResponse resp = get(serverIp, serverPort, path);
+    std::string raw(data.begin(), data.end());
+    if (!tryParseRequest(data, req)) return;
+    
+    std::cout << "[HTTPServer] " << req.method << " " << req.path << "\n";
+    
+    // Generate response via handler
+    HTTPResponse resp = handler_(req);
+    sendResponse(resp);
 }

@@ -7,7 +7,13 @@
 #include "core/Router.hpp"
 #include "layer2/Switch.hpp"
 #include "layer7/HTTPMessage.hpp"
+#include "layer7/DHCPClient.hpp"
+#include "layer7/DHCPServer.hpp"
+#include <map>
 using namespace std;
+
+// Global map: nama host -> DHCPServer yang sedang berjalan
+map<string, DHCPServer*> g_dhcpServers;
 
 #define C_OK "\033[32m"
 #define C_ERR "\033[31m"
@@ -400,6 +406,53 @@ bool CLI::processCommand(const string &line)
                 err("Only hosts can http_get.");
             }
         }
+        else if (args.size() >= 2 && args[1] == "dhcp_server")
+        {
+            if (!host) {
+                err("dhcp_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start") {
+                if (g_dhcpServers.count(host->getName())) {
+                    info(host->getName() + " sudah ada DHCP server.");
+                } else {
+                    string poolStart = (args.size() >= 4) ? args[3] : "192.168.1.100";
+                    string poolEnd   = (args.size() >= 5) ? args[4] : "192.168.1.200";
+                    string gateway   = (args.size() >= 6) ? args[5] : host->getIpAddress();
+                    uint8_t prefix   = (args.size() >= 7) ? stoi(args[6]) : 24;
+                    DHCPServer* srv = new DHCPServer(host, poolStart, poolEnd, gateway, prefix);
+                    srv->start();
+                    g_dhcpServers[host->getName()] = srv;
+                    ok("DHCP server berjalan di " + host->getName());
+                }
+            } else if (args.size() >= 3 && args[2] == "stop") {
+                if (g_dhcpServers.count(host->getName())) {
+                    delete g_dhcpServers[host->getName()];
+                    g_dhcpServers.erase(host->getName());
+                    ok("DHCP server di " + host->getName() + " dihentikan.");
+                } else {
+                    err("Tidak ada DHCP server di " + host->getName());
+                }
+            } else {
+                err("Penggunaan: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]");
+            }
+        }
+        else if (args.size() >= 2 && args[1] == "dhcp_discover")
+        {
+            if (!host) {
+                err("dhcp_discover hanya untuk host.");
+                return true;
+            }
+            DHCPClient dhcp(host);
+            bool result = dhcp.discover();
+            if (result) {
+                ok("DHCP selesai. IP baru: " + host->getIpAddress() +
+                   "  GW: " + host->getDefaultGateway());
+            } else {
+                err("DHCP discover gagal — tidak ada response dari server.");
+            }
+        }
+
         else
         {
             err("Perintah tidak dikenal untuk node: " + args[1]);

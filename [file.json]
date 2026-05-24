@@ -1,0 +1,39 @@
+{
+  "hosts": [
+    {
+      "name": "H1",
+      "ip_address": "0.0.0.0/0",
+      "default_gateway": "0.0.0.0"
+    },
+    {
+      "name": "H2",
+      "ip_address": "0.0.0.0/0",
+      "default_gateway": "0.0.0.0"
+    },
+    {
+      "name": "H3",
+      "ip_address": "0.0.0.0/0",
+      "default_gateway": "0.0.0.0"
+    }
+  ],
+  "switches": [
+    {
+      "name": "SW1",
+      "num_ports": 24,
+      "vlans": [
+      ]
+    }
+  ],
+  "routers": [
+    {
+      "name": "R1",
+      "interfaces": [
+        { "port": 1, "ip_address": "0.0.0.0/0" }
+      ],
+      "routing_table": [
+      ]
+    }
+  ],
+  "links": [
+  ]
+}
