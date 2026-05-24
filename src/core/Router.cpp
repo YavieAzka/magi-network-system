@@ -192,6 +192,16 @@ void Router::routePacket(Interface* inInterface, const vector<uint8_t>& ipBytes)
             cerr << getName() << " Failed to parse Ipv4: " << e.what() << std::endl;
             return; 
         } 
+        if (pkt.dstIP == "255.255.255.255") {
+            // Broadcast di-flood ke semua interface kecuali yang menerimanya
+            for (auto& [port, ip] : ifaceIp_) {
+                Interface* outIfc = getInterface(port);
+                if (outIfc && outIfc != inInterface && outIfc->isConnected()) {
+                    outIfc->send(ipBytes); // kirim raw bytes langsung
+                }
+            }
+            return;
+        }
         if (!pkt.verifyChecksum()){ 
             std::cout << getName() << " IPv4 checksum invalid, drop " << pkt.srcIP << " -> " << pkt.dstIP << std::endl;
             return;
@@ -235,7 +245,7 @@ void Router::routePacket(Interface* inInterface, const vector<uint8_t>& ipBytes)
         pkt.decrementTTL();
         std::cout << "[" << getName() << "] TTL decremented -> " << (int)pkt.ttl
           << " | checksum recalculated\n";
-          
+
         const RoutingTableEntry* route = longestPrefixMatch(pkt.dstIP); 
         if (!route){ 
             std::cout << getName() << " No route to " << pkt.dstIP << ", sending ICMP unreachable to " << pkt.srcIP << std::endl; 
