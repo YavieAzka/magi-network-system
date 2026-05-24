@@ -649,7 +649,7 @@ void Host::handleUDPSegment(const std::string &srcIp, const std::vector<uint8_t>
     auto it = udpSockets_.find(seg.dstPort);
     if (it != udpSockets_.end())
     {
-        it->second->pushUdpData(seg.payload, srcIp);
+        it->second->pushUdpData(seg.payload);
     }
     else
     {
