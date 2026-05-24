@@ -202,6 +202,31 @@ void Router::routePacket(Interface* inInterface, const vector<uint8_t>& ipBytes)
          << " TTL=" << (int)pkt.ttl
          << " proto=" << (int)pkt.protocol << std::endl;
 
+         // Cek apakah paket ditujukan ke salah satu IP interface router ini
+        for (const auto& [port, ip] : ifaceIp_) {
+            if (ip == pkt.dstIP) {
+                // Paket untuk router sendiri — balas ICMP Echo Reply
+                if (pkt.protocol == IPv4Packet::PROTOCOL_ICMP) {
+                    ICMPMessage icmp;
+                    try { icmp.deserialize(pkt.payload); } catch (...) { return; }
+
+                    if (icmp.getICMPType() == ICMP::TYPE_ECHO_REQUEST) {
+                        ICMPMessage reply = ICMPMessage::buildEchoReply(icmp);
+                        IPv4Packet replyPkt(ip, pkt.srcIP,
+                                        IPv4Packet::PROTOCOL_ICMP, 64,
+                                        reply.toBytes());
+                        replyPkt.checksum = replyPkt.calculateChecksum();
+
+                        string nextHop = pkt.srcIP;
+                        forwardIpPacket(port, nextHop, replyPkt.toBytes(), ip);
+                        cout << "[" << getName() << "] ICMP Echo Reply -> " 
+                            << pkt.srcIP << "\n";
+                    }
+                }
+                return; // paket untuk router, tidak perlu di-forward
+            }
+        }
+        
         if (pkt.ttl <= 1){ 
             std::cout << getName() << " End of TTL, ICMP sent to " << pkt.srcIP << std::endl; 
             sendIcmpTimeExceeded(inInterface, ipBytes);
