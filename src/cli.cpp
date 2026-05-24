@@ -6,6 +6,7 @@
 #include "core/Host.hpp"
 #include "core/Router.hpp"
 #include "layer2/Switch.hpp"
+#include "layer7/HTTPMessage.hpp"
 using namespace std;
 
 #define C_OK "\033[32m"
@@ -192,7 +193,9 @@ void CLI::handleHelp(const vector<string> &)
             "  <host>   tcp_listen <port>                  Buka port TCP LISTEN\n"
             "  <host>   tcp_connect <IP> <port>            Inisiasi TCP Handshake\n"
             "  <host>   tcp_send <port> <msg>              Kirim data TCP PSH|ACK\n"
-            "  <host>   tcp_close <port>                   Inisiasi TCP Teardown\n"
+            "  <host>   tcp_close <port>                   Initiate TCP teardown\n"
+"  <host>   http_server <port> [webroot]         Start HTTP server on port\n"
+"  <host>   http_get <IP> <port> <path>         Send HTTP GET request\n"
             "  <router> set-ip <port> <IP/CIDR>            Set IP port router\n"
             "  <router> ip route <net> <hop> <port>        Tambah static route\n"
             "  <router> route                              Tampilkan routing table\n"
@@ -369,9 +372,32 @@ bool CLI::processCommand(const string &line)
             if (host) {
                 uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
                 host->tcpClose(srcPort);
-                ok("Koneksi pada port " + to_string(srcPort) + " ditutup.");
+                ok("Connection on port " + to_string(srcPort) + " closed.");
             } else {
-                err("Hanya host yang bisa melakukan tcp_close.");
+                err("Only hosts can tcp_close.");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "http_server")
+        {
+            if (host) {
+                uint16_t port = static_cast<uint16_t>(stoi(args[2]));
+                string webRoot = (args.size() >= 4) ? args[3] : ".";
+                host->startHTTPServer(port, webRoot);
+                ok("HTTP server started on port " + to_string(port));
+            } else {
+                err("Only hosts can run http_server.");
+            }
+        }
+        else if (args.size() >= 5 && args[1] == "http_get")
+        {
+            if (host) {
+                string serverIp = args[2];
+                uint16_t serverPort = static_cast<uint16_t>(stoi(args[3]));
+                string path = args[4];
+                host->httpGet(serverIp, serverPort, path);
+                ok("http_get executed.");
+            } else {
+                err("Only hosts can http_get.");
             }
         }
         else

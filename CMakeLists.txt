@@ -52,6 +52,10 @@ add_library(layer7
     src/layer7/DHCPMessage.cpp
     src/layer7/DHCPServer.cpp
     src/layer7/DHCPClient.cpp
+    src/layer7/DNSMessage.cpp
+    src/layer7/DNSServer.cpp
+    src/layer7/DNSClient.cpp
+    src/layer7/HTTPServer.cpp
 )
 target_include_directories(layer7 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer7 PUBLIC core layer4 util)
@@ -71,10 +75,10 @@ add_executable(test_layer4
 )
 target_link_libraries(test_layer4 PRIVATE core layer2 layer3 layer4 layer7 util)
 
-add_executable(test_dhcp
-    tests/test_dhcp.cpp
-)
-target_link_libraries(test_dhcp PRIVATE core layer2 layer3 layer4 layer7 util)
+# add_executable(test_dhcp
+#     tests/test_dhcp.cpp
+# )
+# target_link_libraries(test_dhcp PRIVATE core layer2 layer3 layer4 layer7 util)
 
 add_executable(test_tcp
     tests/test_tcp.cpp
@@ -85,6 +89,11 @@ add_executable(test_magisocket
     tests/test_magisocket.cpp
 )
 target_link_libraries(test_magisocket PRIVATE core layer2 layer3 layer4 layer7 util)
+
+add_executable(test_http
+    tests/test_http.cpp
+)
+target_link_libraries(test_http PRIVATE core layer2 layer3 layer4 layer7 util)
 
 add_executable(jarkom
     src/cli.cpp
