@@ -31,22 +31,5 @@ private:
     void onSegmentReceived(const TCPSegment &seg);
     bool tryParseRequest(const std::vector<uint8_t> &buffer, HTTPRequest &req);
     void sendResponse(HTTPResponse &resp);
-};
-
-class HTTPClient
-{
-public:
-    HTTPClient(Host &host);
-
-    HTTPResponse get(const std::string &serverIp, uint16_t serverPort, const std::string &path);
-    void getAsync(const std::string &serverIp, uint16_t serverPort, const std::string &path);
-
-    bool hasResponse() const { return responseReady_; }
-    HTTPResponse getResponse() const { return lastResponse_; }
-
-private:
-    Host &host_;
-    TCPSocket *socket_;
-    HTTPResponse lastResponse_;
-    bool responseReady_;
+    void serveOne();
 };
