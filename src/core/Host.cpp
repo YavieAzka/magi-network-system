@@ -119,6 +119,10 @@ void Host::sendLayer3Packet(const string &destIp,
 
 bool Host::ping(const string &targetIp, int count)
 {
+    Interface* ifc = getInterface(1);
+    if (ifc && !arpCache_.hasIp(NetUtils::ipToString(ipRaw_))) {
+        arpCache_.addEntry(NetUtils::ipToString(ipRaw_), ifc->getMacAddress());
+    }
     cout << "\n[" << getName() << "] PING " << targetIp
          << " (" << count << " packets)\n";
 
@@ -232,6 +236,10 @@ void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes
     if (!isActive())
         return;
 
+    // edge case: ping to self
+    if (!arpCache_.hasIp(NetUtils::ipToString(ipRaw_))) {
+        arpCache_.addEntry(NetUtils::ipToString(ipRaw_), inInterface->getMacAddress());
+    }
     EthernetFrame frame;
     try
     {
