@@ -233,7 +233,9 @@ void Router::routePacket(Interface* inInterface, const vector<uint8_t>& ipBytes)
             return;
         }
         pkt.decrementTTL();
-
+        std::cout << "[" << getName() << "] TTL decremented -> " << (int)pkt.ttl
+          << " | checksum recalculated\n";
+          
         const RoutingTableEntry* route = longestPrefixMatch(pkt.dstIP); 
         if (!route){ 
             std::cout << getName() << " No route to " << pkt.dstIP << ", sending ICMP unreachable to " << pkt.srcIP << std::endl; 
