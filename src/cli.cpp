@@ -385,28 +385,56 @@ bool CLI::processCommand(const string &line)
                 err("Only hosts can tcp_close.");
             }
         }
-        else if (args.size() >= 3 && args[1] == "http_server")
+
+        else if (args.size() >= 2 && args[1] == "http_server")
         {
-            if (host) {
-                uint16_t port = static_cast<uint16_t>(stoi(args[2]));
-                string webRoot = (args.size() >= 4) ? args[3] : ".";
-                host->startHTTPServer(port, webRoot);
-                ok("HTTP server started on port " + to_string(port));
+            if (!host) {
+                err("http_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start") {
+                string webRoot = (args.size() >= 4) ? args[3] : "";
+                host->startHTTPServer(80, webRoot);
+                ok("HTTP server started on port 80");
+            } else if (args.size() >= 3 && args[2] == "stop") {
+                // stop: close port 80
+                auto& sockets = host->getTcpSockets();
+                if (sockets.count(80)) {
+                    sockets[80]->close();
+                    delete sockets[80];
+                    sockets.erase(80);
+                    ok("HTTP server di " + host->getName() + " dihentikan.");
+                } else {
+                    err("Tidak ada HTTP server yang berjalan di " + host->getName());
+                }
             } else {
-                err("Only hosts can run http_server.");
+                err("Penggunaan: <host> http_server start [file] | stop");
             }
         }
-        else if (args.size() >= 5 && args[1] == "http_get")
+
+        else if (args.size() >= 3 && args[1] == "http_get")
         {
-            if (host) {
-                string serverIp = args[2];
-                uint16_t serverPort = static_cast<uint16_t>(stoi(args[3]));
-                string path = args[4];
-                host->httpGet(serverIp, serverPort, path);
-                ok("http_get executed.");
-            } else {
-                err("Only hosts can http_get.");
+            if (!host) {
+                err("http_get hanya untuk host.");
+                return true;
             }
+            string url = args[2];
+
+            // Parse url jadi ip/domain dan path
+            string urlHost, urlPath;
+            // hapus http:// kalau ada
+            string s = url;
+            if (s.substr(0, 7) == "http://") s = s.substr(7);
+            size_t slashPos = s.find('/');
+            if (slashPos == string::npos) {
+                urlHost = s;
+                urlPath = "/";
+            } else {
+                urlHost = s.substr(0, slashPos);
+                urlPath = s.substr(slashPos);
+            }
+
+            host->httpGet(urlHost, 80, urlPath);
         }
         // ── DHCP SERVER ──────────────────────────────────────────────────
         // Format: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]
@@ -442,8 +470,6 @@ bool CLI::processCommand(const string &line)
             }
         }
 
-        // ── DHCP DISCOVER ─────────────────────────────────────────────────
-        // Format: <host> dhcp_discover
         else if (args.size() >= 2 && args[1] == "dhcp_discover")
         {
             if (!host) {
