@@ -7,9 +7,10 @@ static void pushU16(std::vector<uint8_t> &buf, uint16_t v)
     buf.push_back(static_cast<uint8_t>(v >> 8));
     buf.push_back(static_cast<uint8_t>(v & 0xFF));
 }
+
 static uint16_t readU16(const std::vector<uint8_t> &buf, size_t offset)
 {
-    if (offset + 2 >= buf.size())
+    if (offset + 2 > buf.size())
         throw std::runtime_error("[DNS] Buffer terlalu pendek saat baca uint16.");
     return (static_cast<uint16_t>(buf[offset]) << 8) | buf[offset + 1];
 }

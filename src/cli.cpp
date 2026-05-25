@@ -9,11 +9,14 @@
 #include "layer7/HTTPMessage.hpp"
 #include "layer7/DHCPClient.hpp"
 #include "layer7/DHCPServer.hpp"
+#include "layer7/DNSServer.hpp"
+#include "layer7/DNSClient.hpp"
 #include <map>
 using namespace std;
 
 // Global map: nama host -> DHCPServer yang sedang berjalan
-map<string, DHCPServer*> g_dhcpServers;
+map<string, DHCPServer *> g_dhcpServers;
+map<string, DNSServer *> g_dnsServers;
 
 #define C_OK "\033[32m"
 #define C_ERR "\033[31m"
@@ -233,10 +236,12 @@ bool CLI::processCommand(const string &line)
         Switch *sw = dynamic_cast<Switch *>(maybeNode);
         if (args.size() >= 2 && args[1] == "arp")
         {
-            if(host){
+            if (host)
+            {
                 host->printArpCache();
             }
-            else if(router){
+            else if (router)
+            {
                 router->printArpCache();
             }
             else
@@ -257,67 +262,86 @@ bool CLI::processCommand(const string &line)
         }
         else if (args.size() >= 4 && args[1] == "tcp_connect")
         {
-            if (host) {
+            if (host)
+            {
                 string destIp = args[2];
                 uint16_t destPort = stoi(args[3]);
                 host->tcpConnect(destIp, destPort);
                 ok("Memicu tcpConnect ke " + destIp + ":" + to_string(destPort));
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang bisa melakukan tcp_connect.");
             }
         }
         else if (args.size() >= 6 && args[1] == "udp_send")
         {
-            if (host) {
+            if (host)
+            {
                 string destIp = args[2];
                 uint16_t destPort = stoi(args[3]);
                 uint16_t srcPort = stoi(args[4]);
                 string message = args[5];
-                for (size_t i = 6; i < args.size(); ++i) {
+                for (size_t i = 6; i < args.size(); ++i)
+                {
                     message += " " + args[i];
                 }
-                
+
                 vector<uint8_t> payload(message.begin(), message.end());
                 host->sendUDP(destIp, destPort, srcPort, payload);
                 ok("Datagram UDP terkirim dari " + host->getName());
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang bisa melakukan udp_send.");
             }
         }
 
         else if (args.size() >= 3 && args[1] == "set-ip")
         {
-            if (host) {
+            if (host)
+            {
                 // Format: h1 set-ip 192.168.1.10/24
                 host->setIpAddress(args[2]);
-            } else if (router) {
+            }
+            else if (router)
+            {
                 // Format: r1 set-ip 1 192.168.1.1/24
-                if (args.size() < 4) {
+                if (args.size() < 4)
+                {
                     err("Penggunaan: <NamaRouter> set-ip <port> <IP/CIDR>");
                     return true;
                 }
                 int port = stoi(args[2]);
                 router->setInterfaceIp(port, args[3]);
-            } else {
+            }
+            else
+            {
                 err(args[0] + " tidak mendukung set-ip (hanya host/router).");
             }
         }
         else if (args.size() >= 3 && args[1] == "set-gw")
         {
-            if (host) {
+            if (host)
+            {
                 host->setDefaultGateway(args[2]);
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang mendukung set-gw.");
             }
         }
         else if (args.size() >= 6 && args[1] == "ip" && args[2] == "route")
         {
-            if (router) {
-                string nextHop = (args[4] == "-") ? "" : args[4]; 
+            if (router)
+            {
+                string nextHop = (args[4] == "-") ? "" : args[4];
                 int outPort = stoi(args[5]);
                 router->addRoute(args[3], nextHop, outPort);
                 ok("Route berhasil ditambahkan ke " + router->getName());
-            } else {
+            }
+            else
+            {
                 err("Perintah ip route hanya untuk router.");
             }
         }
@@ -330,7 +354,7 @@ bool CLI::processCommand(const string &line)
             }
             host->traceroute(args[2]);
         }
-        else if(args.size() >= 3 && args[1] == "route")
+        else if (args.size() >= 3 && args[1] == "route")
         {
             if (!router)
             {
@@ -341,7 +365,8 @@ bool CLI::processCommand(const string &line)
         }
         else if (args.size() >= 2 && (args[1] == "mac" || args[1] == "mactable"))
         {
-            if (!sw) {
+            if (!sw)
+            {
                 err(args[0] + " bukan switch");
                 return true;
             }
@@ -349,107 +374,233 @@ bool CLI::processCommand(const string &line)
         }
         else if (args.size() >= 3 && args[1] == "tcp_listen")
         {
-            if (host) {
+            if (host)
+            {
                 uint16_t port = stoi(args[2]);
-                host->tcpListen(port); 
+                host->tcpListen(port);
                 ok("Host " + host->getName() + " sekarang LISTEN di port " + to_string(port));
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang bisa listen port TCP.");
             }
         }
         else if (args.size() >= 4 && args[1] == "tcp_send")
         {
-            if (host) {
+            if (host)
+            {
                 uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
                 string message = args[3];
-                for (size_t i = 4; i < args.size(); ++i) {
+                for (size_t i = 4; i < args.size(); ++i)
+                {
                     message += " " + args[i];
                 }
-                
+
                 host->tcpSend(srcPort, message);
                 ok("Perintah tcp_send dieksekusi.");
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang bisa melakukan tcp_send.");
             }
         }
         else if (args.size() >= 3 && args[1] == "tcp_close")
         {
-            if (host) {
+            if (host)
+            {
                 uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
                 host->tcpClose(srcPort);
                 ok("Connection on port " + to_string(srcPort) + " closed.");
-            } else {
+            }
+            else
+            {
                 err("Only hosts can tcp_close.");
             }
         }
         else if (args.size() >= 3 && args[1] == "http_server")
         {
-            if (host) {
+            if (host)
+            {
                 uint16_t port = static_cast<uint16_t>(stoi(args[2]));
                 string webRoot = (args.size() >= 4) ? args[3] : ".";
                 host->startHTTPServer(port, webRoot);
                 ok("HTTP server started on port " + to_string(port));
-            } else {
+            }
+            else
+            {
                 err("Only hosts can run http_server.");
             }
         }
         else if (args.size() >= 5 && args[1] == "http_get")
         {
-            if (host) {
-                string serverIp = args[2];
-                uint16_t serverPort = static_cast<uint16_t>(stoi(args[3]));
-                string path = args[4];
-                host->httpGet(serverIp, serverPort, path);
-                ok("http_get executed.");
-            } else {
+            if (!host)
+            {
                 err("Only hosts can http_get.");
+                return true;
             }
+            string targetIp = args[2];
+
+            bool isDomain = false;
+            for (char c : targetIp)
+                if (isalpha(c))
+                {
+                    isDomain = true;
+                    break;
+                }
+
+            if (isDomain)
+            {
+                if (g_dnsServers.empty())
+                {
+                    err("Tidak ada DNS server aktif. Jalankan dns_server start dulu.");
+                    return true;
+                }
+                auto it = g_dnsServers.begin();
+                Host *dnsHost = dynamic_cast<Host *>(sim.findNode(it->first));
+                DNSClient client(host);
+                targetIp = client.resolve(dnsHost->getIpAddress(), args[2]);
+                if (targetIp.empty())
+                {
+                    err("DNS resolve gagal untuk: " + args[2]);
+                    return true;
+                }
+                ok("DNS resolve: " + args[2] + " -> " + targetIp);
+            }
+
+            uint16_t serverPort = static_cast<uint16_t>(stoi(args[3]));
+            string path = args[4];
+            host->httpGet(targetIp, serverPort, path);
+            ok("http_get executed.");
         }
         else if (args.size() >= 2 && args[1] == "dhcp_server")
         {
-            if (!host) {
+            if (!host)
+            {
                 err("dhcp_server hanya untuk host.");
                 return true;
             }
-            if (args.size() >= 3 && args[2] == "start") {
-                if (g_dhcpServers.count(host->getName())) {
+            if (args.size() >= 3 && args[2] == "start")
+            {
+                if (g_dhcpServers.count(host->getName()))
+                {
                     info(host->getName() + " sudah ada DHCP server.");
-                } else {
+                }
+                else
+                {
                     string poolStart = (args.size() >= 4) ? args[3] : "192.168.1.100";
-                    string poolEnd   = (args.size() >= 5) ? args[4] : "192.168.1.200";
-                    string gateway   = (args.size() >= 6) ? args[5] : host->getIpAddress();
-                    uint8_t prefix   = (args.size() >= 7) ? stoi(args[6]) : 24;
-                    DHCPServer* srv = new DHCPServer(host, poolStart, poolEnd, gateway, prefix);
+                    string poolEnd = (args.size() >= 5) ? args[4] : "192.168.1.200";
+                    string gateway = (args.size() >= 6) ? args[5] : host->getIpAddress();
+                    uint8_t prefix = (args.size() >= 7) ? stoi(args[6]) : 24;
+                    DHCPServer *srv = new DHCPServer(host, poolStart, poolEnd, gateway, prefix);
                     srv->start();
                     g_dhcpServers[host->getName()] = srv;
                     ok("DHCP server berjalan di " + host->getName());
                 }
-            } else if (args.size() >= 3 && args[2] == "stop") {
-                if (g_dhcpServers.count(host->getName())) {
+            }
+            else if (args.size() >= 3 && args[2] == "stop")
+            {
+                if (g_dhcpServers.count(host->getName()))
+                {
                     delete g_dhcpServers[host->getName()];
                     g_dhcpServers.erase(host->getName());
                     ok("DHCP server di " + host->getName() + " dihentikan.");
-                } else {
+                }
+                else
+                {
                     err("Tidak ada DHCP server di " + host->getName());
                 }
-            } else {
+            }
+            else
+            {
                 err("Penggunaan: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]");
             }
         }
         else if (args.size() >= 2 && args[1] == "dhcp_discover")
         {
-            if (!host) {
+            if (!host)
+            {
                 err("dhcp_discover hanya untuk host.");
                 return true;
             }
             DHCPClient dhcp(host);
             bool result = dhcp.discover();
-            if (result) {
+            if (result)
+            {
                 ok("DHCP selesai. IP baru: " + host->getIpAddress() +
                    "  GW: " + host->getDefaultGateway());
-            } else {
+            }
+            else
+            {
                 err("DHCP discover gagal — tidak ada response dari server.");
             }
+        }
+
+        else if (args.size() >= 2 && args[1] == "dns_server")
+        {
+            if (!host)
+            {
+                err("dns_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start")
+            {
+                if (g_dnsServers.count(host->getName()))
+                {
+                    info(host->getName() + " sudah ada DNS server.");
+                }
+                else
+                {
+                    DNSServer *srv = new DNSServer(host);
+                    if (args.size() >= 5)
+                        srv->addRecord(args[3], args[4]);
+                    srv->start();
+                    g_dnsServers[host->getName()] = srv;
+                    ok("DNS server berjalan di " + host->getName() + " (" + host->getIpAddress() + ":53)");
+                }
+            }
+            else if (args.size() >= 3 && args[2] == "stop")
+            {
+                if (g_dnsServers.count(host->getName()))
+                {
+                    delete g_dnsServers[host->getName()];
+                    g_dnsServers.erase(host->getName());
+                    ok("DNS server di " + host->getName() + " dihentikan.");
+                }
+                else
+                {
+                    err("Tidak ada DNS server di " + host->getName());
+                }
+            }
+            else if (args.size() >= 5 && args[2] == "add_record")
+            {
+                if (!g_dnsServers.count(host->getName()))
+                {
+                    err("Tidak ada DNS server di " + host->getName() + ". Jalankan start dulu.");
+                }
+                else
+                {
+                    g_dnsServers[host->getName()]->addRecord(args[3], args[4]);
+                    ok("Record ditambah: " + args[3] + " -> " + args[4]);
+                }
+            }
+            else
+            {
+                err("Penggunaan: <host> dns_server start|stop|add_record [domain] [ip]");
+            }
+        }
+        else if (args.size() >= 4 && args[1] == "dns_resolve")
+        {
+            if (!host)
+            {
+                err("dns_resolve hanya untuk host.");
+                return true;
+            }
+            DNSClient client(host);
+            string result = client.resolve(args[2], args[3]);
+            if (!result.empty())
+                ok(args[3] + " -> " + result);
+            else
+                err(args[3] + " tidak dapat di-resolve (NXDOMAIN atau timeout).");
         }
 
         else
