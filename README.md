@@ -210,7 +210,7 @@ tugas-besar-jarkom-tamat_sudah/
 | 13524027 | Aufa Rienaldifaza Ahmad | — |
 | 13524041 | Nathan Adhika Santosa | — |
 | 13524049 | Arina Azka | M0: Packet; M1: Ethernet & VLAN; M2: Host; M3: UDP; M4: DNS |
-| 13524053 | Angelina Andra | M0: Link, Interface; M4 P5: HTTPClient, URL parser, CLI integration (http_get, http_server, dhcp_discover, dhcp_server), end-to-end testing, README, Bonus: Topology Visualizer |
+| 13524079 | Angelina Andra Alanna | M0: Link, Interface; M4 P5: HTTPClient, URL parser, CLI integration (http_get, http_server, dhcp_discover, dhcp_server), end-to-end testing, README, Bonus: Topology Visualizer |
 | 13524077 | Yavie Azka Putra Araly | M0: CLI, Integration; M1: ARP; M2: ICMP; M3: TCP state machine & 3-way handshake; M4: DHCP; Bonus: RIP |
 
 ---
