@@ -48,6 +48,7 @@ void Host::printArpCache() const
 {
     cout << "\n[" << getName() << "] ARP Cache:\n";
     cout << string(44, '-') << "\n";
+    cout << dec << setfill(' ');
     cout << left << setw(18) << "IP Address" << setw(20) << "MAC Address" << "\n";
     cout << string(44, '-') << "\n";
     const auto &tbl = arpCache_.getTable();
@@ -55,7 +56,7 @@ void Host::printArpCache() const
         cout << "(kosong)\n";
     else
         for (const auto &[ip, mac] : tbl)
-            cout << left << setw(18) << ip << setw(20) << mac << "\n";
+            cout << dec << setfill(' ') << left << setw(18) << ip << setw(20) << mac << "\n";
     cout << string(44, '-') << "\n\n";
 }
 
@@ -523,6 +524,21 @@ void Host::sendUDP(const std::string &targetIp, uint16_t srcPort, uint16_t dstPo
 void Host::tcpConnect(const std::string &targetIp, uint16_t targetPort)
 {
     uint16_t localPort = 12345;
+
+    auto it = tcpSockets_.find(localPort);
+    if (it != tcpSockets_.end()) {
+        if (it->second->state != TCPState::CLOSED) {
+            std::cout << "[" << getName() << "] Port " << localPort
+                      << " sudah digunakan (state: "
+                      << it->second->stateToString()
+                      << "), tidak bisa membuka koneksi baru.\n";
+            return;
+        } else {
+            delete it->second;
+            tcpSockets_.erase(it);
+        }
+    }
+
     TCPSocket *socket = new TCPSocket(getIpAddress(), localPort,
                                       [this](const TCPSegment &seg, const std::string &dstIp, uint16_t dstPort)
                                       {
@@ -649,7 +665,7 @@ void Host::handleUDPSegment(const std::string &srcIp, const std::vector<uint8_t>
     auto it = udpSockets_.find(seg.dstPort);
     if (it != udpSockets_.end())
     {
-        it->second->pushUdpData(seg.payload, srcIp);
+        it->second->pushUdpData(seg.payload);
     }
     else
     {

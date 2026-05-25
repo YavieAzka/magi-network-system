@@ -59,8 +59,13 @@ vector<uint8_t> EthernetFrame::toBytes() const
 
 void EthernetFrame::deserialize(const vector<uint8_t> &raw)
 {
-    if (raw.size() < 18 || (vlanId >= 0 && raw.size() < 22))
+    if (raw.size() < 15)
         throw runtime_error("Error: Frame too short");
+
+    // Cek VLAN tag dari raw bytes
+    bool hasVlan = (raw[12] == 0x81 && raw[13] == 0x00);
+    if (hasVlan && raw.size() < 19) // 15 + 4 byte VLAN tag
+        throw runtime_error("Error: Frame too short for VLAN");
 
     size_t pos = 0;
 
@@ -170,10 +175,10 @@ string EthernetFrame::toString() const
     if (vlanId >= 0)
         oss << " vlan=" << vlanId;
     oss << " ethertype=0x" << hex << uppercase
-        << setw(4) << setfill('0') << etherType
+        << setw(4) << ('0') << etherType
         << " payload=" << dec << payload.size() << "B"
         << " fcs=0x" << hex << uppercase
-        << setw(8) << setfill('0') << fcs
+        << setw(8) << ('0') << fcs
         << " }";
     return oss.str();
 }

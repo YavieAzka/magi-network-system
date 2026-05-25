@@ -244,7 +244,6 @@ bool CLI::processCommand(const string &line)
                 err(args[0] + " bukan host");
                 return true;
             }
-            host->printArpCache();
         }
         else if (args.size() >= 3 && args[1] == "ping")
         {

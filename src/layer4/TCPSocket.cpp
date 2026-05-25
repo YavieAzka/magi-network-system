@@ -215,6 +215,12 @@ void TCPSocket::handleIncomingSegment(const TCPSegment &seg)
 
     case TCPState::ESTABLISHED:
     {
+        if (seg.flags & TCP_FLAG_SYN) 
+        {
+            std::cout << "[TCPSocket " << localIP << ":" << localPort << "] "
+                    << "Menerima SYN saat ESTABLISHED, diabaikan.\n";
+            break;
+        }
         if (seg.flags & TCP_FLAG_FIN)
         {
             ackNum = seg.seqNum + 1;
