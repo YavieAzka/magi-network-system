@@ -112,6 +112,7 @@ void Router::printArpCache() const
 {
     cout << "\n[" << getName() << "] ARP Cache:\n";
     cout << string(44, '-') << "\n";
+    cout << dec << setfill(' ');  // tambahkan ini
     cout << left << setw(18) << "IP Address" << setw(20) << "MAC Address" << "\n";
     cout << string(44, '-') << "\n";
     const auto &tbl = arpCache_.getTable();
@@ -119,7 +120,7 @@ void Router::printArpCache() const
         cout << "(kosong)\n";
     else
         for (const auto &[ip, mac] : tbl)
-            cout << left << setw(18) << ip << setw(20) << mac << "\n";
+            cout << dec << setfill(' ') << left << setw(18) << ip << setw(20) << mac << "\n";
     cout << string(44, '-') << "\n\n";
 }
 

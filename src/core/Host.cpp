@@ -48,6 +48,7 @@ void Host::printArpCache() const
 {
     cout << "\n[" << getName() << "] ARP Cache:\n";
     cout << string(44, '-') << "\n";
+    cout << dec << setfill(' ');
     cout << left << setw(18) << "IP Address" << setw(20) << "MAC Address" << "\n";
     cout << string(44, '-') << "\n";
     const auto &tbl = arpCache_.getTable();
@@ -55,7 +56,7 @@ void Host::printArpCache() const
         cout << "(kosong)\n";
     else
         for (const auto &[ip, mac] : tbl)
-            cout << left << setw(18) << ip << setw(20) << mac << "\n";
+            cout << dec << setfill(' ') << left << setw(18) << ip << setw(20) << mac << "\n";
     cout << string(44, '-') << "\n\n";
 }
 
@@ -119,8 +120,9 @@ void Host::sendLayer3Packet(const string &destIp,
 
 bool Host::ping(const string &targetIp, int count)
 {
-    Interface* ifc = getInterface(1);
-    if (ifc && !arpCache_.hasIp(NetUtils::ipToString(ipRaw_))) {
+    Interface *ifc = getInterface(1);
+    if (ifc && !arpCache_.hasIp(NetUtils::ipToString(ipRaw_)))
+    {
         arpCache_.addEntry(NetUtils::ipToString(ipRaw_), ifc->getMacAddress());
     }
     cout << "\n[" << getName() << "] PING " << targetIp
@@ -145,12 +147,13 @@ bool Host::ping(const string &targetIp, int count)
 
         if (icmpReplyReceived_)
         {
-            if (icmpReplyType_ == ICMP::TYPE_ECHO_REPLY) {
+            if (icmpReplyType_ == ICMP::TYPE_ECHO_REPLY)
+            {
                 cout << "[" << getName() << "] Reply from " << icmpReplySrcIp_
                      << ": seq=" << seq
                      << " time=" << fixed << setprecision(2) << rttMs << "ms\n";
                 ++received;
-            } 
+            }
         }
         else
         {
@@ -217,27 +220,29 @@ void Host::traceroute(const string &targetIp, int maxHops)
     }
     cout << "[" << getName() << "] Max hops tercapai.\n\n";
 }
-void Host::setIpAddress(const string& ipCidr) {
+void Host::setIpAddress(const string &ipCidr)
+{
     auto [ip, prefix] = NetUtils::parseCIDR(ipCidr);
     ipRaw_ = ip;
     prefix_ = prefix;
     cout << "[" << getName() << "] IP telah dikonfigurasi ke " << getIpAddress() << "/" << (int)prefix_ << "\n";
 }
 
-void Host::setDefaultGateway(const string& gw) {
+void Host::setDefaultGateway(const string &gw)
+{
     gatewayRaw_ = NetUtils::stringToIp(gw);
     cout << "[" << getName() << "] Gateway telah dikonfigurasi ke " << getDefaultGateway() << "\n";
 }
 
-
 void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
 {
-    //std::cout << "[DEBUG handleReceive " << getName() << "] " << rawBytes.size() << " bytes masuk\n";
+    // std::cout << "[DEBUG handleReceive " << getName() << "] " << rawBytes.size() << " bytes masuk\n";
     if (!isActive())
         return;
 
     // edge case: ping to self
-    if (!arpCache_.hasIp(NetUtils::ipToString(ipRaw_))) {
+    if (!arpCache_.hasIp(NetUtils::ipToString(ipRaw_)))
+    {
         arpCache_.addEntry(NetUtils::ipToString(ipRaw_), inInterface->getMacAddress());
     }
     EthernetFrame frame;
@@ -322,9 +327,9 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
     {
         cout << "[" << getName() << "] IPv4 checksum invalid, drop\n";
         return;
-    }   
+    }
     if (ipPkt.dstIP != getIpAddress() && ipPkt.dstIP != "255.255.255.255")
-        return; 
+        return;
 
     cout << "[" << getName() << "] IPv4 diterima dari " << ipPkt.srcIP
          << " proto=" << (int)ipPkt.protocol << "\n";
@@ -333,10 +338,12 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
         handleIcmpPacket(ipPkt.srcIP, ipPkt.payload);
 
     // added by yavie after implementing TCPSocket
-    else if (ipPkt.protocol == 6){ // 6 = nomor protokol TCP
+    else if (ipPkt.protocol == 6)
+    { // 6 = nomor protokol TCP
         handleTCPSegment(ipPkt.srcIP, ipPkt.payload);
     }
-    else if (ipPkt.protocol == 17) {
+    else if (ipPkt.protocol == 17)
+    {
         handleUDPSegment(ipPkt.srcIP, ipPkt.payload);
     }
 }
@@ -397,20 +404,25 @@ void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpByte
 void Host::handleTCPSegment(const string &srcIp, const vector<uint8_t> &tcpBytes)
 {
     TCPSegment seg;
-    try { seg = TCPSegment::deserialize(tcpBytes); }
-    catch (const exception &e) {
+    try
+    {
+        seg = TCPSegment::deserialize(tcpBytes);
+    }
+    catch (const exception &e)
+    {
         cerr << "[" << getName() << "] Failed to parse TCPSegment: " << e.what() << "\n";
         return;
     }
 
     auto it = tcpSockets_.find(seg.dstPort);
-    if (it == tcpSockets_.end()) {
+    if (it == tcpSockets_.end())
+    {
         cout << "[" << getName() << "] No socket on port "
              << seg.dstPort << ", drop\n";
         return;
     }
 
-    TCPSocket* socket = it->second;
+    TCPSocket *socket = it->second;
     socket->remoteIP = srcIp;
     socket->handleIncomingSegment(seg);
 
@@ -463,7 +475,8 @@ void Host::processHTTPRequest(uint16_t port)
     while (socket->state != TCPState::CLOSED)
     {
         if (chrono::duration_cast<chrono::milliseconds>(
-                chrono::steady_clock::now() - closeStart).count() >= 3000)
+                chrono::steady_clock::now() - closeStart)
+                .count() >= 3000)
         {
             cout << "[" << getName() << ":http] Close timeout on port " << port << "\n";
             break;
@@ -475,30 +488,32 @@ void Host::processHTTPRequest(uint16_t port)
     delete socket;
 
     TCPSocket *newSocket = new TCPSocket(getIpAddress(), port,
-        [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort) {
-            vector<uint8_t> tcpBytes = seg.toBytes();
-            sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
-        });
+                                         [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort)
+                                         {
+                                             vector<uint8_t> tcpBytes = seg.toBytes();
+                                             sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+                                         });
     newSocket->passiveOpen();
     tcpSockets_[port] = newSocket;
     cout << "[" << getName() << ":http] Re-listening on port " << port << "\n";
 }
 
-void Host::sendTCP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload) 
+void Host::sendTCP(const std::string &targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t> &payload)
 {
     sendLayer3Packet(targetIp, payload, 6);
 }
 
-void Host::sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t>& payload) 
+void Host::sendUDP(const std::string &targetIp, uint16_t srcPort, uint16_t dstPort, const std::vector<uint8_t> &payload)
 {
     UDPSegment udp;
     udp.srcPort = srcPort;
     udp.dstPort = dstPort;
-    udp.length = 8 + payload.size(); 
+    udp.length = 8 + payload.size();
     udp.payload = payload;
     udp.checksum = UDPSegment::calculateChecksum(getIpAddress(), targetIp, udp);
     std::vector<uint8_t> udpBytes = udp.toBytes();
-    if (targetIp == "255.255.255.255") {
+    if (targetIp == "255.255.255.255")
+    {
         IPv4Packet ipPkt(getIpAddress(), targetIp, 17, 64, udpBytes);
         sendEthernet("FF:FF:FF:FF:FF:FF", 0x0800, ipPkt.toBytes());
         return;
@@ -506,75 +521,81 @@ void Host::sendUDP(const std::string& targetIp, uint16_t srcPort, uint16_t dstPo
     sendLayer3Packet(targetIp, udpBytes, 17);
 }
 
-void Host::tcpConnect(const std::string& targetIp, uint16_t targetPort) 
+void Host::tcpConnect(const std::string &targetIp, uint16_t targetPort)
 {
     uint16_t localPort = 12345;
-    TCPSocket* socket = new TCPSocket(getIpAddress(), localPort, 
-        [this](const TCPSegment& seg, const std::string& dstIp, uint16_t dstPort) {
-            std::vector<uint8_t> tcpBytes = seg.toBytes();
-            this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+
+    auto it = tcpSockets_.find(localPort);
+    if (it != tcpSockets_.end()) {
+        if (it->second->state != TCPState::CLOSED) {
+            std::cout << "[" << getName() << "] Port " << localPort
+                      << " sudah digunakan (state: "
+                      << it->second->stateToString()
+                      << "), tidak bisa membuka koneksi baru.\n";
+            return;
+        } else {
+            delete it->second;
+            tcpSockets_.erase(it);
         }
-    );
-    
+    }
+
+    TCPSocket *socket = new TCPSocket(getIpAddress(), localPort,
+                                      [this](const TCPSegment &seg, const std::string &dstIp, uint16_t dstPort)
+                                      {
+                                          std::vector<uint8_t> tcpBytes = seg.toBytes();
+                                          this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+                                      });
+
     tcpSockets_[localPort] = socket;
     std::cout << "[" << getName() << "] Memulai TCP Active Open ke " << targetIp << ":" << targetPort << "...\n";
-    
+
     socket->activeOpen(targetIp, targetPort);
-    
-    auto startTime = std::chrono::steady_clock::now();
-    bool isConnected = false;
 
-    while (true) {
-        if (socket->state == TCPState::ESTABLISHED) {
-            isConnected = true;
-            break;
-        }
-        if (socket->state == TCPState::CLOSED) {
-            std::cout << "[" << getName() << "] tcpConnect gagal: Koneksi ditolak atau ditutup (status CLOSED).\n";
-            break;
-        }
-
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 2000) {
-            std::cout << "[" << getName() << "] tcpConnect gagal: Timeout 2 detik tercapai.\n";
-            break;
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    bool isConnected = (socket->state == TCPState::ESTABLISHED);
+    if (!isConnected)
+    {
+        std::cout << "[" << getName() << "] tcpConnect gagal: state="
+                  << socket->stateToString() << "\n";
     }
-    
-    if (isConnected) {
+
+    if (isConnected)
+    {
         std::cout << "[" << getName() << "] TCP Connection ESTABLISHED dengan " << targetIp << "!\n";
-    } else {
+    }
+    else
+    {
         socket->close();
         tcpSockets_.erase(localPort);
         delete socket;
     }
 }
 
-void Host::tcpListen(uint16_t port) {
-    TCPSocket* socket = new TCPSocket(getIpAddress(), port, 
-        [this](const TCPSegment& seg, const std::string& dstIp, uint16_t dstPort) {
-            std::vector<uint8_t> tcpBytes = seg.toBytes();
-            this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
-        }
-    );
+void Host::tcpListen(uint16_t port)
+{
+    TCPSocket *socket = new TCPSocket(getIpAddress(), port,
+                                      [this](const TCPSegment &seg, const std::string &dstIp, uint16_t dstPort)
+                                      {
+                                          std::vector<uint8_t> tcpBytes = seg.toBytes();
+                                          this->sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+                                      });
     socket->passiveOpen();
     tcpSockets_[port] = socket;
     std::cout << "[" << getName() << "] Berhasil membuka port " << port << " (Status: LISTEN)\n";
 }
 
-void Host::tcpSend(uint16_t srcPort, const std::string& message) 
+void Host::tcpSend(uint16_t srcPort, const std::string &message)
 {
     auto it = tcpSockets_.find(srcPort);
-    if (it == tcpSockets_.end()) {
+    if (it == tcpSockets_.end())
+    {
         std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
         return;
     }
 
-    TCPSocket* socket = it->second;
+    TCPSocket *socket = it->second;
 
-    if (socket->state != TCPState::ESTABLISHED) {
+    if (socket->state != TCPState::ESTABLISHED)
+    {
         std::cout << "[ERR] Gagal kirim data. Socket port " << srcPort << " tidak dalam state ESTABLISHED.\n";
         return;
     }
@@ -582,28 +603,32 @@ void Host::tcpSend(uint16_t srcPort, const std::string& message)
     std::vector<uint8_t> payload(message.begin(), message.end());
 
     std::cout << "[" << getName() << "] Mengirim data (" << payload.size() << " bytes) via port " << srcPort << "...\n";
-    
-    socket->sendData(payload); 
+
+    socket->sendData(payload);
 }
 
-void Host::tcpClose(uint16_t srcPort) 
+void Host::tcpClose(uint16_t srcPort)
 {
     auto it = tcpSockets_.find(srcPort);
-    if (it == tcpSockets_.end()) {
+    if (it == tcpSockets_.end())
+    {
         std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
         return;
     }
 
-    TCPSocket* socket = it->second;
+    TCPSocket *socket = it->second;
 
     std::cout << "[" << getName() << "] Memicu 4-Way Teardown pada port " << srcPort << "...\n";
-    
-    socket->close(); 
+
+    socket->close();
 
     auto closeStart = std::chrono::steady_clock::now();
-    while (socket->state != TCPState::CLOSED) {
+    while (socket->state != TCPState::CLOSED)
+    {
         if (std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - closeStart).count() >= 3000) {
+                std::chrono::steady_clock::now() - closeStart)
+                .count() >= 3000)
+        {
             std::cout << "[" << getName() << "] tcpClose timeout, socket di-force close.\n";
             break;
         }
@@ -612,14 +637,20 @@ void Host::tcpClose(uint16_t srcPort)
     std::cout << "[" << getName() << "] Socket port " << srcPort << " sekarang CLOSED.\n";
 }
 
-void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>& udpBytes) {
+void Host::handleUDPSegment(const std::string &srcIp, const std::vector<uint8_t> &udpBytes)
+{
     UDPSegment seg;
-    try {
+    try
+    {
         seg = UDPSegment::deserialize(udpBytes);
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: " << e.what() << "\n";
         return;
-    } catch (...) {
+    }
+    catch (...)
+    {
         std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: Error tidak dikenal.\n";
         return;
     }
@@ -632,10 +663,13 @@ void Host::handleUDPSegment(const std::string& srcIp, const std::vector<uint8_t>
     std::cout << "[" << getName() << "] Menerima segment UDP dari " << srcIp << " dengan ukuran " << udpBytes.size() << " bytes\n";
 
     auto it = udpSockets_.find(seg.dstPort);
-    if (it != udpSockets_.end()) {
+    if (it != udpSockets_.end())
+    {
         it->second->pushUdpData(seg.payload);
-    } else {
-        std::cout << "[" << getName() << "] Tidak ada UDP socket di port " 
+    }
+    else
+    {
+        std::cout << "[" << getName() << "] Tidak ada UDP socket di port "
                   << seg.dstPort << ", paket didrop.\n";
     }
 }
@@ -672,10 +706,14 @@ void Host::startHTTPServer(uint16_t port, const string &webRoot)
             ext = filePath.substr(dot + 1);
 
         string contentType = "text/html";
-        if (ext == "txt") contentType = "text/plain";
-        else if (ext == "json") contentType = "application/json";
-        else if (ext == "css") contentType = "text/css";
-        else if (ext == "js") contentType = "application/javascript";
+        if (ext == "txt")
+            contentType = "text/plain";
+        else if (ext == "json")
+            contentType = "application/json";
+        else if (ext == "css")
+            contentType = "text/css";
+        else if (ext == "js")
+            contentType = "application/javascript";
 
         return HTTPResponse::make200(contentType, content.str());
     };
@@ -690,11 +728,11 @@ void Host::httpGet(const string &serverIp, uint16_t serverPort, const string &pa
         localPort++;
 
     TCPSocket *clientSocket = new TCPSocket(getIpAddress(), localPort,
-        [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort)
-        {
-            vector<uint8_t> tcpBytes = seg.toBytes();
-            sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
-        });
+                                            [this](const TCPSegment &seg, const string &dstIp, uint16_t dstPort)
+                                            {
+                                                vector<uint8_t> tcpBytes = seg.toBytes();
+                                                sendTCP(dstIp, seg.srcPort, dstPort, tcpBytes);
+                                            });
 
     tcpSockets_[localPort] = clientSocket;
 
@@ -748,7 +786,8 @@ void Host::httpGet(const string &serverIp, uint16_t serverPort, const string &pa
             cout << "[" << getName() << ":http] Received "
                  << resp.statusCode << " " << resp.reasonPhrase << "\n";
             if (!resp.body.empty())
-                cout << "[" << getName() << ":http] Body:\n" << resp.body << "\n";
+                cout << "[" << getName() << ":http] Body:\n"
+                     << resp.body << "\n";
             break;
         }
 
@@ -764,7 +803,8 @@ void Host::httpGet(const string &serverIp, uint16_t serverPort, const string &pa
                 cout << "[" << getName() << ":http] Received "
                      << resp.statusCode << " " << resp.reasonPhrase << "\n";
                 if (!resp.body.empty())
-                    cout << "[" << getName() << ":http] Body:\n" << resp.body << "\n";
+                    cout << "[" << getName() << ":http] Body:\n"
+                         << resp.body << "\n";
             }
             else
             {
@@ -788,23 +828,26 @@ void Host::httpGet(const string &serverIp, uint16_t serverPort, const string &pa
 }
 
 void Host::sendUDPBroadcast(uint16_t srcPort, uint16_t dstPort,
-                             const std::vector<uint8_t>& payload) {
+                            const std::vector<uint8_t> &payload)
+{
     UDPSegment udp;
-    udp.srcPort  = srcPort;
-    udp.dstPort  = dstPort;
-    udp.length   = 8 + payload.size();
-    udp.payload  = payload;
-    udp.checksum = UDPSegment::calculateChecksum(getIpAddress(), 
-                                                  "255.255.255.255", udp);
+    udp.srcPort = srcPort;
+    udp.dstPort = dstPort;
+    udp.length = 8 + payload.size();
+    udp.payload = payload;
+    udp.checksum = UDPSegment::calculateChecksum(getIpAddress(),
+                                                 "255.255.255.255", udp);
     std::vector<uint8_t> udpBytes = udp.toBytes();
     IPv4Packet ipPkt(getIpAddress(), "255.255.255.255", 17, 64, udpBytes);
     std::vector<uint8_t> ipBytes = ipPkt.toBytes();
 
     // Kirim ke semua interface yang terhubung
-    for (int port = 1; port <= 48; ++port) {
-        Interface* ifc = getInterface(port);
-        if (ifc && ifc->isConnected()) {
-            EthernetFrame frame("FF:FF:FF:FF:FF:FF", ifc->getMacAddress(), 
+    for (int port = 1; port <= 48; ++port)
+    {
+        Interface *ifc = getInterface(port);
+        if (ifc && ifc->isConnected())
+        {
+            EthernetFrame frame("FF:FF:FF:FF:FF:FF", ifc->getMacAddress(),
                                 0x0800, ipBytes);
             ifc->send(frame.toBytes());
         }
