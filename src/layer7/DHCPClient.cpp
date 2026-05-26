@@ -1,4 +1,5 @@
 #include "layer7/DHCPClient.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Host.hpp"
 #include "core/Interface.hpp"
 #include <sstream>
@@ -59,18 +60,14 @@ bool DHCPClient::discover() {
     // Offer
     DHCPMessage offer = recvMessage();
     if (offer.getMessageType() != DHCP_MSG_OFFER) {
-        std::cerr << "[DHCPClient:" << host_->getName() << "] "
-                  << "Tidak menerima DHCP Offer, DORA gagal.\n";
         socket_->close();
         delete socket_;
         socket_ = nullptr;
-        return false;
+        throw NetworkException("DHCPClient on " + host_->getName() + " did not receive DHCP Offer, DORA failed");
     }
 
     if (offer.xid != xid_) {
-        std::cerr << "[DHCPClient:" << host_->getName() << "] "
-                  << "xid Offer tidak cocok, diabaikan.\n";
-        return false;
+        throw NetworkException("DHCPClient on " + host_->getName() + " xid Offer mismatch, ignored");
     }
 
     std::string offeredIp  = offer.yiaddr;
@@ -110,18 +107,14 @@ bool DHCPClient::discover() {
 
     DHCPMessage ack = recvMessage();
     if (ack.getMessageType() != DHCP_MSG_ACK) {
-        std::cerr << "[DHCPClient:" << host_->getName() << "] "
-                  << "Tidak menerima DHCP ACK, DORA gagal.\n";
         socket_->close();
         delete socket_;
         socket_ = nullptr;
-        return false;
+        throw NetworkException("DHCPClient on " + host_->getName() + " did not receive DHCP ACK, DORA failed");
     }
 
     if (ack.xid != xid_) {
-        std::cerr << "[DHCPClient:" << host_->getName() << "] "
-                  << "xid ACK tidak cocok, diabaikan.\n";
-        return false;
+        throw NetworkException("DHCPClient on " + host_->getName() + " xid ACK mismatch, ignored");
     }
 
     // dora done
@@ -179,7 +172,6 @@ DHCPMessage DHCPClient::recvMessage() {
     try {
         return DHCPMessage::deserialize(raw);
     } catch (const std::exception& e) {
-        std::cerr << "[DHCPClient] Gagal parse reply DHCP: " << e.what() << "\n";
-        return DHCPMessage{};
+        throw ParseException("DHCPClient failed to parse DHCP reply: " + std::string(e.what()));
     }
 }

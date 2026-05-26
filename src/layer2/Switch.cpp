@@ -1,4 +1,5 @@
 #include "../../include/layer2/Switch.hpp"
+#include "../../include/util/Exceptions.hpp"
 
 Switch::Switch(const std::string &name, int _numPorts)
     : Node(name), numPorts(_numPorts)
@@ -14,8 +15,7 @@ void Switch::configurePort(int port, PortType type, uint16_t pvid, std::vector<i
 {
     if (!isValidPort(port))
     {
-        std::cerr << "[" << getName() << "] ERROR: Port " << port << " tidak valid.\n";
-        return;
+        throw NetworkException(getName() + " error: invalid port " + std::to_string(port));
     }
 
     portConfigs[port] = PortConfig(type, pvid, allowedVlans);
@@ -112,8 +112,7 @@ void Switch::handleReceive(Interface *inInterface, const std::vector<uint8_t> &r
 
     if (!isValidPort(ingressPort))
     {
-        std::cerr << "[" << getName() << "] ERROR: Frame masuk di port tidak valid: " << ingressPort << "\n";
-        return;
+        throw NetworkException(getName() + " error: incoming frame on invalid port " + std::to_string(ingressPort));
     }
 
     EthernetFrame frame;
@@ -123,9 +122,7 @@ void Switch::handleReceive(Interface *inInterface, const std::vector<uint8_t> &r
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[" << getName() << "] ERROR: Gagal parse frame: "
-                  << e.what() << "\n";
-        return;
+        throw ParseException(getName() + " error: failed to parse frame: " + e.what());
     }
 
     const PortConfig &cfg = portConfigs.at(ingressPort);

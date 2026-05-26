@@ -1,4 +1,5 @@
 #include "core/Host.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Interface.hpp"
 #include "layer2/EthernetFrame.hpp"
 #include "layer2/ARP.hpp"
@@ -74,8 +75,7 @@ void Host::sendEthernet(const string &destMac, uint16_t etherType,
     Interface *ifc = getInterface(1);
     if (!ifc)
     {
-        cerr << "[" << getName() << "] Tidak ada interface port 1\n";
-        return;
+        throw NetworkException(getName() + " has no interface on port 1");
     }
     EthernetFrame frame(destMac, ifc->getMacAddress(), etherType, payload);
     ifc->send(frame.toBytes());
@@ -253,8 +253,7 @@ void Host::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes
     }
     catch (const exception &e)
     {
-        cerr << "[" << getName() << "] Gagal parse Ethernet: " << e.what() << "\n";
-        return;
+        throw ParseException(getName() + " failed to parse Ethernet: " + e.what());
     }
 
     string myMac = inInterface->getMacAddress();
@@ -437,8 +436,7 @@ void Host::handleTCPSegment(const string &srcIp, const vector<uint8_t> &tcpBytes
     }
     catch (const exception &e)
     {
-        cerr << "[" << getName() << "] Failed to parse TCPSegment: " << e.what() << "\n";
-        return;
+        throw ParseException(getName() + " failed to parse TCPSegment: " + e.what());
     }
 
     auto it = tcpSockets_.find(seg.dstPort);
@@ -615,16 +613,14 @@ void Host::tcpSend(uint16_t srcPort, const std::string &message)
     auto it = tcpSockets_.find(srcPort);
     if (it == tcpSockets_.end())
     {
-        std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
-        return;
+        throw NetworkException("No active TCP socket on port " + std::to_string(srcPort));
     }
 
     TCPSocket *socket = it->second;
 
     if (socket->state != TCPState::ESTABLISHED)
     {
-        std::cout << "[ERR] Gagal kirim data. Socket port " << srcPort << " tidak dalam state ESTABLISHED.\n";
-        return;
+        throw NetworkException("Failed to send data. Socket port " + std::to_string(srcPort) + " is not in ESTABLISHED state");
     }
 
     std::vector<uint8_t> payload(message.begin(), message.end());
@@ -639,8 +635,7 @@ void Host::tcpClose(uint16_t srcPort)
     auto it = tcpSockets_.find(srcPort);
     if (it == tcpSockets_.end())
     {
-        std::cout << "[ERR] Tidak ada socket TCP aktif di port " << srcPort << "\n";
-        return;
+        throw NetworkException("No active TCP socket on port " + std::to_string(srcPort));
     }
 
     TCPSocket *socket = it->second;
@@ -673,13 +668,11 @@ void Host::handleUDPSegment(const std::string &srcIp, const std::vector<uint8_t>
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: " << e.what() << "\n";
-        return;
+        throw ParseException(getName() + " failed to deserialize UDPSegment: " + e.what());
     }
     catch (...)
     {
-        std::cerr << "[" << getName() << "] Gagal deserialize UDPSegment: Error tidak dikenal.\n";
-        return;
+        throw ParseException(getName() + " failed to deserialize UDPSegment: Unknown error");
     }
     // std::cout << "[DEBUG handleUDPSegment " << getName() << "] "
     //           << "dstPort=" << seg.dstPort

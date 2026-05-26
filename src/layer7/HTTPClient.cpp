@@ -1,4 +1,5 @@
 #include "layer7/HTTPClient.hpp"
+#include "util/Exceptions.hpp"
 #include "layer7/DNSClient.hpp"
 #include "layer7/MagiSocket.hpp"
 #include "layer7/HTTPMessage.hpp"
@@ -73,14 +74,12 @@ bool HTTPClient::connectAndSend(const string& url, const string& dnsServerIp) {
         cout << "[HTTPClient] Target IP langsung: " << targetIp << "\n";
     } else {
         if (dnsServerIp.empty()) {
-            cerr << "[HTTPClient] DNS server IP diperlukan.\n";
-            return false;
+            throw NetworkException("HTTPClient DNS server IP is required");
         }
         DNSClient dns(host_);
         targetIp = dns.resolve(dnsServerIp, urlHost_);
         if (targetIp.empty()) {
-            cerr << "[HTTPClient] DNS resolve gagal: " << urlHost_ << "\n";
-            return false;
+            throw NetworkException("HTTPClient DNS resolution failed for " + urlHost_);
         }
         cout << "[HTTPClient] DNS: " << urlHost_ << " -> " << targetIp << "\n";
     }
@@ -106,9 +105,8 @@ bool HTTPClient::connectAndSend(const string& url, const string& dnsServerIp) {
         return true;
 
     } catch (const exception& e) {
-        cerr << "[HTTPClient] connectAndSend error: " << e.what() << "\n";
         if (sock_) { try { sock_->close(); } catch (...) {} delete sock_; sock_ = nullptr; }
-        return false;
+        throw NetworkException("HTTPClient connectAndSend error: " + string(e.what()));
     }
 }
 
@@ -129,9 +127,8 @@ string HTTPClient::recvAndClose() {
         return resp.body;
 
     } catch (const exception& e) {
-        cerr << "[HTTPClient] recvAndClose error: " << e.what() << "\n";
         if (sock_) { try { sock_->close(); } catch (...) {} delete sock_; sock_ = nullptr; }
-        return string("[ERR] ") + e.what();
+        throw NetworkException("HTTPClient recvAndClose error: " + string(e.what()));
     }
 }
 

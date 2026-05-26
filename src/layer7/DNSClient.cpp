@@ -1,4 +1,5 @@
 #include "layer7/DNSClient.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Host.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -9,7 +10,7 @@ DNSClient::DNSClient(Host *host)
     : host_(host), socket_(nullptr)
 {
     if (!host_)
-        throw std::invalid_argument("[DNSClient] Pointer host tidak boleh null.");
+        throw std::invalid_argument("DNSClient pointer host cannot be null");
 }
 
 DNSClient::~DNSClient()
@@ -49,12 +50,10 @@ std::string DNSClient::resolve(const std::string &serverIp,
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[DNSClient:" << host_->getName() << "] "
-                  << "Gagal terima DNS response: " << e.what() << "\n";
         socket_->close();
         delete socket_;
         socket_ = nullptr;
-        return "";
+        throw NetworkException("DNSClient on " + host_->getName() + " failed to receive DNS response: " + e.what());
     }
 
     socket_->close();
@@ -63,10 +62,7 @@ std::string DNSClient::resolve(const std::string &serverIp,
 
     if (response.id != query.id)
     {
-        std::cerr << "[DNSClient:" << host_->getName() << "] "
-                  << "ID response tidak cocok (got " << response.id
-                  << ", expect " << query.id << "), diabaikan.\n";
-        return "";
+        throw NetworkException("DNSClient on " + host_->getName() + " ID response mismatch (got " + std::to_string(response.id) + ", expected " + std::to_string(query.id) + "), ignored.");
     }
     if (response.isNxDomain())
     {
@@ -77,9 +73,7 @@ std::string DNSClient::resolve(const std::string &serverIp,
 
     if (response.rdata.empty())
     {
-        std::cerr << "[DNSClient:" << host_->getName() << "] "
-                  << "Response kosong untuk domain \"" << domain << "\".\n";
-        return "";
+        throw NetworkException("DNSClient on " + host_->getName() + " empty response for domain " + domain);
     }
 
     std::cout << "[DNSClient:" << host_->getName() << "] "
@@ -105,7 +99,7 @@ DNSMessage DNSClient::recvResponse()
     std::vector<uint8_t> raw = socket_->recv(512);
 
     if (raw.empty())
-        throw std::runtime_error("[DNSClient] Response kosong / timeout.");
+        throw NetworkException("DNSClient empty response or timeout");
 
     return DNSMessage::fromBytes(raw);
 }

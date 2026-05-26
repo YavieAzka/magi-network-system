@@ -1,4 +1,5 @@
 #include "layer7/DNSServer.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Host.hpp"
 #include <iostream>
 #include <algorithm>
@@ -9,7 +10,7 @@ DNSServer::DNSServer(Host *host,
     : host_(host), socket_(nullptr), records_(records)
 {
     if (!host_)
-        throw std::invalid_argument("[DNSServer] Pointer host tidak boleh null.");
+        throw std::invalid_argument("DNSServer pointer host cannot be null");
 }
 
 DNSServer::~DNSServer()
@@ -58,10 +59,7 @@ void DNSServer::handleIncoming(const std::string &srcIp,
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[DNSServer:" << host_->getName() << "] "
-                  << "Gagal parse DNS query dari " << srcIp
-                  << ": " << e.what() << "\n";
-        return;
+        throw ParseException("DNSServer on " + host_->getName() + " failed to parse DNS query from " + srcIp + ": " + e.what());
     }
 
     if (query.isResponse())

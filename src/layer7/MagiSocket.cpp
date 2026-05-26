@@ -1,4 +1,5 @@
 #include "layer7/MagiSocket.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Host.hpp"
 #include "layer4/TCPSocket.hpp"
 #include <iostream>
@@ -54,7 +55,7 @@ MagiSocket::~MagiSocket() {
         try {
             close();
         } catch (const std::exception& e) {
-            std::cerr << "[MagiSocket] Warning saat destructor memanggil close(): " << e.what() << "\n";
+            throw NetworkException("MagiSocket warning during destructor calling close: " + std::string(e.what()));
         } 
     }
 }

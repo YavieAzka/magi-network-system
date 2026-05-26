@@ -1,5 +1,6 @@
 #pragma once
 #include "core/Simulator.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Node.hpp"
 #include "core/Link.hpp"
 #include "core/Interface.hpp"
@@ -60,8 +61,7 @@ public:
     static bool exportDot(const Simulator& sim, const std::string& filename) {
         std::ofstream out(filename);
         if (!out.is_open()) {
-            std::cerr << "[Visualizer] Gagal buka file: " << filename << "\n";
-            return false;
+            throw SimulationException("Visualizer failed to open file: " + filename);
         }
 
         out << "graph MagiTopology {\n";

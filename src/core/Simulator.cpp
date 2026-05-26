@@ -1,4 +1,5 @@
 #include "core/Simulator.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Node.hpp"
 #include "core/Interface.hpp"
 #include "core/Link.hpp"
@@ -241,7 +242,6 @@ bool Simulator::loadTopology(const string &filepath)
     }
     catch (const exception &e)
     {
-        cerr << "[ERR] loadTopology: " << e.what() << "\n";
-        return false;
+        throw SimulationException("Failed to load topology: " + std::string(e.what()));
     }
 }

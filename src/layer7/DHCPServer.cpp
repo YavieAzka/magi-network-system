@@ -1,4 +1,5 @@
 #include "layer7/DHCPServer.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Host.hpp"
 #include <iostream>
 #include <sstream>
@@ -72,8 +73,7 @@ void DHCPServer::handleIncoming(const std::string& srcIp,
     try {
         msg = DHCPMessage::deserialize(udpPayload);
     } catch (const std::exception& e) {
-        std::cerr << "[DHCPServer] Gagal parse pesan DHCP: " << e.what() << "\n";
-        return;
+        throw ParseException("DHCPServer failed to parse DHCP message: " + std::string(e.what()));
     }
 
     uint8_t msgType = msg.getMessageType();
@@ -119,8 +119,7 @@ std::string DHCPServer::allocateIp(const std::string& clientMac) {
         if (!used) return ip;
     }
 
-    std::cerr << "[DHCPServer] Pool IP habis, tidak bisa mengalokasikan IP baru.\n";
-    return "";
+    throw NetworkException("DHCPServer IP pool exhausted, cannot allocate new IP");
 }
 
 
@@ -183,9 +182,7 @@ void DHCPServer::handleRequest(const DHCPMessage& msg,
         if (leaseIt != leaseTable_.end()) {
             assignedIp = leaseIt->second;
         } else {
-            std::cerr << "[DHCPServer] Tidak ada offer untuk MAC "
-                      << msg.chaddr << "\n";
-            return;
+            throw NetworkException("DHCPServer has no offer for MAC " + msg.chaddr);
         }
     }
 

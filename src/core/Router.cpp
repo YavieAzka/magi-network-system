@@ -1,4 +1,5 @@
 #include "core/Router.hpp"
+#include "util/Exceptions.hpp"
 #include "core/Interface.hpp"
 #include "layer2/EthernetFrame.hpp"
 #include "layer2/ARP.hpp"
@@ -145,8 +146,7 @@ void Router::handleReceive(Interface *inInterface, const vector<uint8_t> &rawByt
     }
     catch (const exception &e)
     {
-        std::cerr << "failed to parse ethernet" << e.what() << std::endl;
-        return;
+        throw ParseException("Failed to parse ethernet: " + std::string(e.what()));
     }
 
     string myMac = inInterface->getMacAddress();
@@ -213,8 +213,7 @@ void Router::routePacket(Interface *inInterface, const vector<uint8_t> &ipBytes)
     }
     catch (const exception &e)
     {
-        cerr << getName() << " Failed to parse Ipv4: " << e.what() << std::endl;
-        return;
+        throw ParseException(getName() + " failed to parse IPv4: " + std::string(e.what()));
     }
     if (pkt.dstIP == "255.255.255.255")
     {
@@ -336,13 +335,11 @@ void Router::forwardIpPacket(int outPort, const std::string &nextHopIp, const st
     Interface *outIfc = getInterface(outPort);
     if (!outIfc)
     {
-        std::cerr << getName() << " No interface port" << outPort << "\n";
-        return;
+        throw NetworkException(getName() + " has no interface on port " + std::to_string(outPort));
     }
     if (!outIfc->isConnected())
     {
-        std::cerr << getName() << "] Port" << outPort << " not connected\n";
-        return;
+        throw NetworkException(getName() + " port " + std::to_string(outPort) + " is not connected");
     }
 
     int pathMTU = outIfc->getMtu();
@@ -355,8 +352,7 @@ void Router::forwardIpPacket(int outPort, const std::string &nextHopIp, const st
     }
     catch (const exception &e)
     {
-        std::cerr << getName() << " forwardIpPacket: failed to parse IP: " << e.what() << "\n";
-        return;
+        throw ParseException(getName() + " forwardIpPacket failed to parse IP: " + std::string(e.what()));
     }
 
     uint16_t ipTotalLen = static_cast<uint16_t>(ipBytes.size());
@@ -396,8 +392,7 @@ void Router::forwardIpPacket(int outPort, const std::string &nextHopIp, const st
         vector<IPv4Packet> fragments = pkt.fragment(static_cast<uint16_t>(pathMTU));
         if (fragments.empty())
         {
-            cerr << "[" << getName() << "] Fragmentation gagal, drop packet\n";
-            return;
+            throw NetworkException(getName() + " fragmentation failed, dropping packet");
         }
         if (fragments.size() == 1 && !pkt.isDontFragment())
         {
@@ -484,8 +479,7 @@ void Router::sendIcmpTimeExceeded(Interface *inInterface, const vector<uint8_t> 
     const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
     if (!route)
     {
-        std::cerr << "[" << getName() << "] Error: no route\n";
-        return;
+        throw NetworkException(getName() + " error: no route");
     }
     string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
     forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);
@@ -513,8 +507,7 @@ void Router::sendIcmpUnreachable(Interface *inInterface, const vector<uint8_t> &
     const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
     if (!route)
     {
-        std::cerr << "[" << getName() << "] Error: no route\n";
-        return;
+        throw NetworkException(getName() + " error: no route");
     }
     string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
     forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);
@@ -542,8 +535,7 @@ void Router::sendIcmpFragNeeded(Interface *inInterface, const vector<uint8_t> &o
     const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
     if (!route)
     {
-        std::cerr << "[" << getName() << "] Error: no route for Frag Needed ICMP\n";
-        return;
+        throw NetworkException(getName() + " error: no route for Frag Needed ICMP");
     }
     string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
     forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);

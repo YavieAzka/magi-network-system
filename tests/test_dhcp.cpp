@@ -418,10 +418,13 @@ int main() {
         testMultipleClients();
         testConsistentIpForSameClient();
         testUDPRouting();
-    } catch (const exception& e) {
-        cerr << "\n\033[31m[FATAL]\033[0m Exception tidak tertangani: "
-             << e.what() << "\n";
-        return 1;
+    }
+    catch (const exception& e) {
+        throw std::runtime_error("Unhandled exception: " + std::string(e.what()));
+    }
+    catch (...)
+    {
+        throw std::runtime_error("Unknown exception");
     }
 
     cout << "\n========================================\n";
