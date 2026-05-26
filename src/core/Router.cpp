@@ -1,40 +1,41 @@
-#include "core/Router.hpp" 
+#include "core/Router.hpp"
 #include "core/Interface.hpp"
 #include "layer2/EthernetFrame.hpp"
 #include "layer2/ARP.hpp"
 #include "layer3/IPv4Packet.hpp"
 #include "layer3/ICMPMessage.hpp"
 #include "util/NetUtils.hpp"
- 
+
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
 
-Router::Router(const string& name) : Node(name) {
-    std::cout << "[" << name << "] Router initialized" << std::endl; 
-} 
-
-
-std::string Router::getType() const{
-    return "router"; 
+Router::Router(const string &name) : Node(name)
+{
+    std::cout << "[" << name << "] Router initialized" << std::endl;
 }
 
-void Router::setInterfaceIp(int port, const std::string& ipCidr){ 
-    auto [ip, prefix] = NetUtils::parseCIDR(ipCidr); 
+std::string Router::getType() const
+{
+    return "router";
+}
+
+void Router::setInterfaceIp(int port, const std::string &ipCidr)
+{
+    auto [ip, prefix] = NetUtils::parseCIDR(ipCidr);
 
     ifaceIp_[port] = NetUtils::ipToString(ip);
-    ifacePrefix_[port] = prefix; 
+    ifacePrefix_[port] = prefix;
 
-    std::string network = NetUtils::ipToString(NetUtils::applyMask(ip, prefix)); 
-    std::string cidr = network + "/" + to_string(prefix); 
-    addRoute(cidr, "", port); 
-
+    std::string network = NetUtils::ipToString(NetUtils::applyMask(ip, prefix));
+    std::string cidr = network + "/" + to_string(prefix);
+    addRoute(cidr, "", port);
 
     std::cout << "[" << getName() << "] Interface port" << port
-         << " IP=" << ifaceIp_[port] << "/" << (int)prefix << "\n";
-}; 
+              << " IP=" << ifaceIp_[port] << "/" << (int)prefix << "\n";
+};
 
 string Router::getInterfaceIp(int port) const
 {
@@ -42,41 +43,45 @@ string Router::getInterfaceIp(int port) const
     return (it != ifaceIp_.end()) ? it->second : "";
 }
 
-void Router::addRoute(const string& cidr, const string& nextHopIp, int outPort){ 
-    auto slash = cidr.find('/'); 
-    string netStr = cidr.substr(0, slash); 
-    uint8_t prefix = static_cast<uint8_t>(stoi(cidr.substr(slash+1)));
+void Router::addRoute(const string &cidr, const string &nextHopIp, int outPort)
+{
+    auto slash = cidr.find('/');
+    string netStr = cidr.substr(0, slash);
+    uint8_t prefix = static_cast<uint8_t>(stoi(cidr.substr(slash + 1)));
 
-    uint32_t netRaw = NetUtils::applyMask(NetUtils::stringToIp(netStr), prefix); 
+    uint32_t netRaw = NetUtils::applyMask(NetUtils::stringToIp(netStr), prefix);
 
-    for (const auto& e : routingTable_){ 
-        if (e.destNetwork == NetUtils::ipToString(netRaw) && 
-                e.prefixLen == prefix &&
-                e.outPort == outPort)
-            return; 
-    } 
+    for (const auto &e : routingTable_)
+    {
+        if (e.destNetwork == NetUtils::ipToString(netRaw) &&
+            e.prefixLen == prefix &&
+            e.outPort == outPort)
+            return;
+    }
     RoutingTableEntry entry;
     entry.destNetwork = NetUtils::ipToString(netRaw);
-    entry.prefixLen   = prefix;
-    entry.nextHopIp   = nextHopIp;
-    entry.outPort     = outPort;
+    entry.prefixLen = prefix;
+    entry.nextHopIp = nextHopIp;
+    entry.outPort = outPort;
     routingTable_.push_back(entry);
-} 
+}
 
-const RoutingTableEntry* Router::longestPrefixMatch(const string& destIp) const
+const RoutingTableEntry *Router::longestPrefixMatch(const string &destIp) const
 {
     uint32_t dest = NetUtils::stringToIp(destIp);
- 
-    const RoutingTableEntry* best      = nullptr;
-    int                      bestLen   = -1;
- 
-    for (const auto& entry : routingTable_) {
+
+    const RoutingTableEntry *best = nullptr;
+    int bestLen = -1;
+
+    for (const auto &entry : routingTable_)
+    {
         uint32_t net = NetUtils::applyMask(
             NetUtils::stringToIp(entry.destNetwork), entry.prefixLen);
         uint32_t masked = NetUtils::applyMask(dest, entry.prefixLen);
- 
-        if (masked == net && (int)entry.prefixLen > bestLen) {
-            best    = &entry;
+
+        if (masked == net && (int)entry.prefixLen > bestLen)
+        {
+            best = &entry;
             bestLen = entry.prefixLen;
         }
     }
@@ -89,21 +94,25 @@ void Router::printRoutingTable() const
     cout << string(60, '-') << "\n";
     cout << left
          << setw(20) << "Destination"
-         << setw(8)  << "Prefix"
+         << setw(8) << "Prefix"
          << setw(18) << "Next Hop"
-         << setw(6)  << "Port" << "\n";
+         << setw(6) << "Port" << "\n";
     cout << string(60, '-') << "\n";
- 
-    if (routingTable_.empty()) {
+
+    if (routingTable_.empty())
+    {
         cout << "empty\n";
-    } else {
-        for (const auto& e : routingTable_) {
+    }
+    else
+    {
+        for (const auto &e : routingTable_)
+        {
             string nh = e.nextHopIp.empty() ? "directly" : e.nextHopIp;
             cout << left
                  << setw(20) << e.destNetwork
-                 << setw(8)  << ("/" + to_string(e.prefixLen))
+                 << setw(8) << ("/" + to_string(e.prefixLen))
                  << setw(18) << nh
-                 << setw(6)  << e.outPort << "\n";
+                 << setw(6) << e.outPort << "\n";
         }
     }
     cout << string(60, '-') << "\n\n";
@@ -112,7 +121,7 @@ void Router::printArpCache() const
 {
     cout << "\n[" << getName() << "] ARP Cache:\n";
     cout << string(44, '-') << "\n";
-    cout << dec << setfill(' ');  // tambahkan ini
+    cout << dec << setfill(' '); // tambahkan ini
     cout << left << setw(18) << "IP Address" << setw(20) << "MAC Address" << "\n";
     cout << string(44, '-') << "\n";
     const auto &tbl = arpCache_.getTable();
@@ -124,161 +133,214 @@ void Router::printArpCache() const
     cout << string(44, '-') << "\n\n";
 }
 
-void Router::handleReceive(Interface* inInterface, const vector<uint8_t>& rawBytes){
-    if (!isActive()) return; 
+void Router::handleReceive(Interface *inInterface, const vector<uint8_t> &rawBytes)
+{
+    if (!isActive())
+        return;
 
-    EthernetFrame frame; 
-    try{ 
-        frame.deserialize(rawBytes);    
-    } catch(const exception& e){ 
+    EthernetFrame frame;
+    try
+    {
+        frame.deserialize(rawBytes);
+    }
+    catch (const exception &e)
+    {
         std::cerr << "failed to parse ethernet" << e.what() << std::endl;
-        return; 
-    } 
+        return;
+    }
 
-    string myMac = inInterface->getMacAddress(); 
+    string myMac = inInterface->getMacAddress();
     bool toMe = (frame.destMac == myMac) || frame.isBroadcast();
 
-    if (frame.etherType == 0x0806){ 
-        if (!toMe) return; 
+    if (frame.etherType == 0x0806)
+    {
+        if (!toMe)
+            return;
 
-        ARPPacket arp; 
-        try {
-            arp.deserialize(const_cast<vector<uint8_t>&>(frame.payload));
-        }catch(...){
-            return; 
+        ARPPacket arp;
+        try
+        {
+            arp.deserialize(const_cast<vector<uint8_t> &>(frame.payload));
+        }
+        catch (...)
+        {
+            return;
         }
         string senderIp = arp.getSenderProtAddr();
         string senderMac = NetUtils::macToString(arp.getSenderHwAddr());
-        arpCache_.addEntry(senderIp, senderMac); 
+        arpCache_.addEntry(senderIp, senderMac);
 
-        if (arp.getOperation() == ARP_OP_REQUEST){
-            int port = inInterface->getPortNumber(); 
-            std::string myIp = getInterfaceIp(port);    
-            if (arp.getTargetProtAddr() != myIp) return; 
+        if (arp.getOperation() == ARP_OP_REQUEST)
+        {
+            int port = inInterface->getPortNumber();
+            std::string myIp = getInterfaceIp(port);
+            if (arp.getTargetProtAddr() != myIp)
+                return;
 
-            vector<uint8_t> myMacBytes = NetUtils::stringToMac(myMac); 
-            ARPPacket reply = ARPPacket::createReply(myMacBytes, myIp, arp.getSenderHwAddr(), senderIp); 
+            vector<uint8_t> myMacBytes = NetUtils::stringToMac(myMac);
+            ARPPacket reply = ARPPacket::createReply(myMacBytes, myIp, arp.getSenderHwAddr(), senderIp);
 
-            EthernetFrame resp(senderMac, myMac, 0x0806, reply.toBytes()); 
-            inInterface->send(resp.toBytes()); 
+            EthernetFrame resp(senderMac, myMac, 0x0806, reply.toBytes());
+            inInterface->send(resp.toBytes());
 
-            cout << getName() << " ARP Reply " << senderIp << "\n"; 
-        }else if (arp.getOperation() == ARP_OP_REPLY){ 
-            auto queued = arpCache_.dequeueAll(senderIp)    ;
-            for (const auto& pkt : queued) {
-                EthernetFrame ef(senderMac, myMac, 0x0800, pkt); 
-                inInterface->send(ef.toBytes()); 
-
-            }
-
+            cout << getName() << " ARP Reply " << senderIp << "\n";
         }
-        return; 
-    } 
-
-    if (frame.etherType == 0x0800){ 
-        routePacket(inInterface, frame.payload); 
-        return; 
-    }
-
-
-}
-
-
-void Router::routePacket(Interface* inInterface, const vector<uint8_t>& ipBytes)
-{
-        IPv4Packet pkt; 
-        try { 
-            pkt.deserialize(ipBytes);
-        }catch (const exception& e) { 
-            cerr << getName() << " Failed to parse Ipv4: " << e.what() << std::endl;
-            return; 
-        } 
-        if (pkt.dstIP == "255.255.255.255") {
-            // Broadcast di-flood ke semua interface kecuali yang menerimanya
-            for (auto& [port, ip] : ifaceIp_) {
-                Interface* outIfc = getInterface(port);
-                if (outIfc && outIfc != inInterface && outIfc->isConnected()) {
-                    outIfc->send(ipBytes); // kirim raw bytes langsung
-                }
-            }
-            return;
-        }
-        if (!pkt.verifyChecksum()){ 
-            std::cout << getName() << " IPv4 checksum invalid, drop " << pkt.srcIP << " -> " << pkt.dstIP << std::endl;
-            return;
-        } 
-
-        std::cout << "[" << getName() << "] IPv4 " << pkt.srcIP
-         << " -> " << pkt.dstIP
-         << " TTL=" << (int)pkt.ttl
-         << " proto=" << (int)pkt.protocol << std::endl;
-
-         // Cek apakah paket ditujukan ke salah satu IP interface router ini
-        for (const auto& [port, ip] : ifaceIp_) {
-            if (ip == pkt.dstIP) {
-                // Paket untuk router sendiri — balas ICMP Echo Reply
-                if (pkt.protocol == IPv4Packet::PROTOCOL_ICMP) {
-                    ICMPMessage icmp;
-                    try { icmp.deserialize(pkt.payload); } catch (...) { return; }
-
-                    if (icmp.getICMPType() == ICMP::TYPE_ECHO_REQUEST) {
-                        ICMPMessage reply = ICMPMessage::buildEchoReply(icmp);
-                        IPv4Packet replyPkt(ip, pkt.srcIP,
-                                        IPv4Packet::PROTOCOL_ICMP, 64,
-                                        reply.toBytes());
-                        replyPkt.checksum = replyPkt.calculateChecksum();
-
-                        string nextHop = pkt.srcIP;
-                        forwardIpPacket(port, nextHop, replyPkt.toBytes(), ip);
-                        cout << "[" << getName() << "] ICMP Echo Reply -> " 
-                            << pkt.srcIP << "\n";
-                    }
-                }
-                return; // paket untuk router, tidak perlu di-forward
+        else if (arp.getOperation() == ARP_OP_REPLY)
+        {
+            auto queued = arpCache_.dequeueAll(senderIp);
+            for (const auto &pkt : queued)
+            {
+                EthernetFrame ef(senderMac, myMac, 0x0800, pkt);
+                inInterface->send(ef.toBytes());
             }
         }
-        
-        if (pkt.ttl <= 1){ 
-            std::cout << getName() << " End of TTL, ICMP sent to " << pkt.srcIP << std::endl; 
-            sendIcmpTimeExceeded(inInterface, ipBytes);
-            return;
-        }
-        pkt.decrementTTL();
-        std::cout << "[" << getName() << "] TTL decremented -> " << (int)pkt.ttl
-          << " | checksum recalculated\n";
-
-        const RoutingTableEntry* route = longestPrefixMatch(pkt.dstIP); 
-        if (!route){ 
-            std::cout << getName() << " No route to " << pkt.dstIP << ", sending ICMP unreachable to " << pkt.srcIP << std::endl; 
-            sendIcmpUnreachable(inInterface, ipBytes, 0);
-            return; 
-        } 
-        
-        cout << getName() << " Route: " << pkt.dstIP << " via " << (route->nextHopIp.empty() ? "direct" : route->nextHopIp) << " port" << route->outPort << std::endl; 
-    
-        string nextHopIp = route->nextHopIp.empty() ? pkt.dstIP : route->nextHopIp; 
-
-        forwardIpPacket(route->outPort, nextHopIp, pkt.toBytes(), pkt.srcIP); 
-} 
-
-void Router::forwardIpPacket(int outPort, const std::string& nextHopIp, const std::vector<uint8_t>& ipBytes, const std::string& srcForIcmp){ 
-    Interface* outIfc = getInterface(outPort);
-    if (!outIfc) {
-        std::cerr  << getName() << " No interface port" << outPort << "\n";
         return;
     }
-    if (!outIfc->isConnected()) {
+
+    if (frame.etherType == 0x0800)
+    {
+        routePacket(inInterface, frame.payload);
+        return;
+    }
+}
+
+void Router::routePacket(Interface *inInterface, const vector<uint8_t> &ipBytes)
+{
+    IPv4Packet pkt;
+    try
+    {
+        pkt.deserialize(ipBytes);
+    }
+    catch (const exception &e)
+    {
+        cerr << getName() << " Failed to parse Ipv4: " << e.what() << std::endl;
+        return;
+    }
+    if (pkt.dstIP == "255.255.255.255")
+    {
+        // Broadcast di-flood ke semua interface kecuali yang menerimanya
+        for (auto &[port, ip] : ifaceIp_)
+        {
+            Interface *outIfc = getInterface(port);
+            if (outIfc && outIfc != inInterface && outIfc->isConnected())
+            {
+                outIfc->send(ipBytes); // kirim raw bytes langsung
+            }
+        }
+        return;
+    }
+    if (!pkt.verifyChecksum())
+    {
+        std::cout << getName() << " IPv4 checksum invalid, drop " << pkt.srcIP << " -> " << pkt.dstIP << std::endl;
+        return;
+    }
+
+    std::cout << "[" << getName() << "] IPv4 " << pkt.srcIP
+              << " -> " << pkt.dstIP
+              << " TTL=" << (int)pkt.ttl
+              << " proto=" << (int)pkt.protocol << std::endl;
+
+    // Cek apakah paket ditujukan ke salah satu IP interface router ini
+    for (const auto &[port, ip] : ifaceIp_)
+    {
+        if (ip == pkt.dstIP)
+        {
+            // Paket untuk router sendiri — balas ICMP Echo Reply
+            if (pkt.protocol == IPv4Packet::PROTOCOL_ICMP)
+            {
+                ICMPMessage icmp;
+                try
+                {
+                    icmp.deserialize(pkt.payload);
+                }
+                catch (...)
+                {
+                    return;
+                }
+
+                if (icmp.getICMPType() == ICMP::TYPE_ECHO_REQUEST)
+                {
+                    ICMPMessage reply = ICMPMessage::buildEchoReply(icmp);
+                    IPv4Packet replyPkt(ip, pkt.srcIP,
+                                        IPv4Packet::PROTOCOL_ICMP, 64,
+                                        reply.toBytes());
+                    replyPkt.checksum = replyPkt.calculateChecksum();
+
+                    string nextHop = pkt.srcIP;
+                    forwardIpPacket(port, nextHop, replyPkt.toBytes(), ip);
+                    cout << "[" << getName() << "] ICMP Echo Reply -> "
+                         << pkt.srcIP << "\n";
+                }
+            }
+            return; // paket untuk router, tidak perlu di-forward
+        }
+    }
+
+    if (pkt.ttl <= 1)
+    {
+        std::cout << getName() << " End of TTL, ICMP sent to " << pkt.srcIP << std::endl;
+        sendIcmpTimeExceeded(inInterface, ipBytes);
+        return;
+    }
+    pkt.decrementTTL();
+    std::cout << "[" << getName() << "] TTL decremented -> " << (int)pkt.ttl
+              << " | checksum recalculated\n";
+
+    const RoutingTableEntry *route = longestPrefixMatch(pkt.dstIP);
+    if (!route)
+    {
+        std::cout << getName() << " No route to " << pkt.dstIP << ", sending ICMP unreachable to " << pkt.srcIP << std::endl;
+        sendIcmpUnreachable(inInterface, ipBytes, 0);
+        return;
+    }
+
+    cout << getName() << " Route: " << pkt.dstIP << " via " << (route->nextHopIp.empty() ? "direct" : route->nextHopIp) << " port" << route->outPort << std::endl;
+
+    string nextHopIp = route->nextHopIp.empty() ? pkt.dstIP : route->nextHopIp;
+
+    if (!acl_.empty())
+    {
+        int srcPort = -1, dstPort = -1;
+        if ((pkt.protocol == 6 || pkt.protocol == 17) && pkt.payload.size() >= 4)
+        {
+            srcPort = (pkt.payload[0] << 8) | pkt.payload[1];
+            dstPort = (pkt.payload[2] << 8) | pkt.payload[3];
+        }
+        if (!acl_.isPermitted(pkt.srcIP, pkt.dstIP, pkt.protocol,
+                              srcPort, dstPort,
+                              inInterface->getPortNumber(), route->outPort))
+        {
+            return;
+        }
+    }
+
+    forwardIpPacket(route->outPort, nextHopIp, pkt.toBytes(), pkt.srcIP);
+}
+
+void Router::forwardIpPacket(int outPort, const std::string &nextHopIp, const std::vector<uint8_t> &ipBytes, const std::string &srcForIcmp)
+{
+    Interface *outIfc = getInterface(outPort);
+    if (!outIfc)
+    {
+        std::cerr << getName() << " No interface port" << outPort << "\n";
+        return;
+    }
+    if (!outIfc->isConnected())
+    {
         std::cerr << getName() << "] Port" << outPort << " not connected\n";
         return;
     }
 
     string myMac = outIfc->getMacAddress();
 
-    if (arpCache_.hasIp(nextHopIp)) {
+    if (arpCache_.hasIp(nextHopIp))
+    {
         string dstMac = arpCache_.getMac(nextHopIp);
         EthernetFrame frame(dstMac, myMac, 0x0800, ipBytes);
         outIfc->send(frame.toBytes());
-    } else {
+    }
+    else
+    {
         cout << "[" << getName() << "] MAC " << nextHopIp
              << " unknown, enqueued \n";
         arpCache_.enqueuePacket(nextHopIp, ipBytes);
@@ -289,29 +351,37 @@ void Router::forwardIpPacket(int outPort, const std::string& nextHopIp, const st
         EthernetFrame arpFrame("FF:FF:FF:FF:FF:FF", myMac, 0x0806, req.toBytes());
         outIfc->send(arpFrame.toBytes());
     }
-} 
+}
 
-string routerSrcIp(Router* r, Interface* inIfc)
+string routerSrcIp(Router *r, Interface *inIfc)
 {
     string ip = r->getInterfaceIp(inIfc->getPortNumber());
     return ip.empty() ? "0.0.0.0" : ip;
 }
 
-
-void Router::sendIcmpTimeExceeded(Interface* inInterface, const vector<uint8_t>&     originalIpBytes){
+void Router::sendIcmpTimeExceeded(Interface *inInterface, const vector<uint8_t> &originalIpBytes)
+{
     vector<uint8_t> orig(originalIpBytes.begin(), originalIpBytes.begin() + min((size_t)28, originalIpBytes.size()));
     ICMPMessage icmp = ICMPMessage::buildTimeExceeded(orig);
 
     IPv4Packet origPkt;
-    try { origPkt.deserialize(originalIpBytes); } catch (...) { return; }
+    try
+    {
+        origPkt.deserialize(originalIpBytes);
+    }
+    catch (...)
+    {
+        return;
+    }
 
     string myIp = routerSrcIp(this, inInterface);
     IPv4Packet reply(myIp, origPkt.srcIP,
                      IPv4Packet::PROTOCOL_ICMP, 64, icmp.toBytes());
     reply.checksum = reply.calculateChecksum();
 
-    const RoutingTableEntry* route = longestPrefixMatch(origPkt.srcIP);
-    if (!route) {
+    const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
+    if (!route)
+    {
         std::cerr << "[" << getName() << "] Error: no route\n";
         return;
     }
@@ -319,23 +389,46 @@ void Router::sendIcmpTimeExceeded(Interface* inInterface, const vector<uint8_t>&
     forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);
 }
 
-void Router::sendIcmpUnreachable(Interface* inInterface, const vector<uint8_t>& originalIpBytes, uint8_t code)
+void Router::sendIcmpUnreachable(Interface *inInterface, const vector<uint8_t> &originalIpBytes, uint8_t code)
 {
     vector<uint8_t> orig(originalIpBytes.begin(), originalIpBytes.begin() + min((size_t)28, originalIpBytes.size()));
     ICMPMessage icmp = ICMPMessage::buildUnreachable(orig, code);
 
     IPv4Packet origPkt;
-    try { origPkt.deserialize(originalIpBytes); } catch (...) { return; }
+    try
+    {
+        origPkt.deserialize(originalIpBytes);
+    }
+    catch (...)
+    {
+        return;
+    }
 
     string myIp = routerSrcIp(this, inInterface);
     IPv4Packet reply(myIp, origPkt.srcIP, IPv4Packet::PROTOCOL_ICMP, 64, icmp.toBytes());
     reply.checksum = reply.calculateChecksum();
 
-    const RoutingTableEntry* route = longestPrefixMatch(origPkt.srcIP);
-    if (!route) {
+    const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
+    if (!route)
+    {
         std::cerr << "[" << getName() << "] Error: no route\n";
         return;
     }
     string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
     forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);
+}
+
+void Router::addACLRule(const ACLRule &rule)
+{
+    acl_.addRule(rule);
+}
+void Router::removeACLRule(int index)
+{
+    acl_.removeRule(index);
+}
+void Router::printACL() const
+{
+    cout << "\n[" << getName() << "] ACL Rules:\n";
+    acl_.printRules();
+    cout << "\n";
 }

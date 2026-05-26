@@ -28,6 +28,12 @@ add_library(layer3
 target_include_directories(layer3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer3 PRIVATE util)
 
+add_library(middleboxes
+    src/middleboxes/ACL.cpp
+)
+target_include_directories(middleboxes PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(middleboxes PRIVATE util)
+
 add_library(core
     src/core/Node.cpp
     src/core/interface.cpp
@@ -38,6 +44,7 @@ add_library(core
     src/core/Router.cpp
 )
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(core PUBLIC middleboxes util)
 
 add_library(layer4
     src/layer4/UDPSegment.cpp
