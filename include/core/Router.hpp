@@ -56,5 +56,7 @@ private:
 
     void sendIcmpUnreachable(Interface *inInterface, const std::vector<uint8_t> &originalIpBytes, uint8_t code = 0);
 
+    void sendIcmpFragNeeded(Interface *inInterface, const std::vector<uint8_t> &originalIpBytes, uint16_t nextHopMTU);
+
     void forwardIpPacket(int outPort, const std::string &nextHopOrDest, const std::vector<uint8_t> &ipBytes, const std::string &srcFromIcmp);
 };

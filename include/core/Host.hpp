@@ -1,6 +1,7 @@
 #pragma once
 #include "core/Node.hpp"
 #include "layer2/ARP.hpp"
+#include "layer3/FragmentReassembler.hpp"
 #include "layer4/TCPSocket.hpp"
 #include <string>
 #include <cstdint>
@@ -72,6 +73,7 @@ private:
     std::map<uint16_t, MagiSocket*> udpSockets_;
 
     std::map<uint16_t, HTTPHandler> httpHandlers_;
+    FragmentReassembler fragReassembler_;
 
     void handleTCPSegment(const std::string& srcIp,
                       const std::vector<uint8_t>& tcpBytes);

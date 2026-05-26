@@ -3,6 +3,7 @@
 #include "layer2/EthernetFrame.hpp"
 #include "layer2/ARP.hpp"
 #include "layer3/IPv4Packet.hpp"
+#include "layer3/FragmentReassembler.hpp"
 #include "layer3/ICMPMessage.hpp"
 #include "layer4/TCPSegment.hpp"
 #include "layer4/TCPSocket.hpp"
@@ -319,9 +320,6 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
     {
         return;
     }
-    // std::cout << "[DEBUG handleIPv4 " << getName() << "] "
-    //           << "src=" << ipPkt.srcIP << " dst=" << ipPkt.dstIP
-    //           << " proto=" << (int)ipPkt.protocol << "\n";
 
     if (!ipPkt.verifyChecksum())
     {
@@ -331,8 +329,29 @@ void Host::handleIPv4Packet(Interface *, const vector<uint8_t> &ipBytes)
     if (ipPkt.dstIP != getIpAddress() && ipPkt.dstIP != "255.255.255.255")
         return;
 
-    cout << "[" << getName() << "] IPv4 diterima dari " << ipPkt.srcIP
-         << " proto=" << (int)ipPkt.protocol << "\n";
+    if (ipPkt.isFragment())
+    {
+        cout << "[" << getName() << "] Fragment diterima: offset="
+             << ipPkt.getFragmentOffset() << " MF=" << ipPkt.isMoreFragments()
+             << " id=" << ipPkt.identification
+             << " len=" << ipPkt.payload.size() << "\n";
+
+        auto reassembled = fragReassembler_.addFragment(ipPkt);
+        if (!reassembled.has_value())
+        {
+            cout << "[" << getName() << "] Waiting for more fragments...\n";
+            return;
+        }
+        ipPkt = reassembled.value();
+        cout << "[" << getName() << "] IPv4 reassembled dari " << ipPkt.srcIP
+             << " proto=" << (int)ipPkt.protocol
+             << " totalLen=" << ipPkt.payload.size() << "\n";
+    }
+    else
+    {
+        cout << "[" << getName() << "] IPv4 diterima dari " << ipPkt.srcIP
+             << " proto=" << (int)ipPkt.protocol << "\n";
+    }
 
     if (ipPkt.protocol == IPv4Packet::PROTOCOL_ICMP)
         handleIcmpPacket(ipPkt.srcIP, ipPkt.payload);
@@ -396,8 +415,16 @@ void Host::handleIcmpPacket(const string &srcIp, const vector<uint8_t> &icmpByte
         icmpReplyReceived_ = true;
         icmpReplySrcIp_ = srcIp;
         icmpReplyType_ = msg.getICMPType();
-        cout << "[" << getName() << "] ICMP Unreachable dari " << srcIp
-             << " code=" << (int)msg.getCode() << "\n";
+        if (msg.getCode() == ICMP::CODE_FRAG_NEEDED)
+        {
+            cout << "[" << getName() << "] ICMP Fragmentation Needed dari " << srcIp
+                 << " code=" << (int)msg.getCode() << "\n";
+        }
+        else
+        {
+            cout << "[" << getName() << "] ICMP Unreachable dari " << srcIp
+                 << " code=" << (int)msg.getCode() << "\n";
+        }
     }
 }
 

@@ -23,6 +23,7 @@ private:
     void handleLoad(const vector<string>& args);
     void handleTopology(const vector<string>& args);
     void handleHelp(const vector<string>& args);
+    void handleMtu(const vector<string>& args);
 
     vector<string> tokenize(const string& line) const;
 

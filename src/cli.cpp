@@ -10,6 +10,7 @@
 #include "util/TopologyVisualizer.hpp"
 #include "layer7/DHCPClient.hpp"
 #include "layer7/DHCPServer.hpp"
+#include "core/Interface.hpp"
 #include <map>
 using namespace std;
 
@@ -209,6 +210,7 @@ void CLI::handleHelp(const vector<string> &)
             "  <router> route                              Tampilkan routing table\n"
             "  <router> arp                                Tampilkan ARP cache router\n"
             "  <switch> mac / mactable                     Tampilkan MAC table\n"
+            "  <node>   mtu <port> <value>                 Set MTU interface (68-9000)\n"
             "\nFormat endpoint: NamaNode  atau  NamaNode:NomorPort\n"
             "  Contoh: link H1 SW1:3 10\n\n";
 }
@@ -371,6 +373,53 @@ bool CLI::processCommand(const string &line)
                 return true;
             }
             sw->printMACTable();
+        }
+        else if (args.size() >= 2 && args[1] == "mtu")
+        {
+            if (args.size() < 3)
+            {
+                err("Penggunaan: <node> mtu <port> <value>");
+                return true;
+            }
+            int port = 1;
+            int mtuVal = 1500;
+            if (maybeNode)
+            {
+                if (host || router || sw)
+                {
+                    if (args.size() >= 4)
+                    {
+                        port = stoi(args[2]);
+                        mtuVal = stoi(args[3]);
+                    }
+                    else if (args.size() >= 3)
+                    {
+                        mtuVal = stoi(args[2]);
+                    }
+                    Interface *ifc = maybeNode->getInterface(port);
+                    if (!ifc)
+                    {
+                        err("Port " + to_string(port) + " tidak ditemukan di " + args[0]);
+                        return true;
+                    }
+                    if (mtuVal < 68)
+                    {
+                        err("MTU minimum adalah 68 byte (IP minimum)");
+                        return true;
+                    }
+                    if (mtuVal > 9000)
+                    {
+                        err("MTU maximum adalah 9000 byte (jumbo frame)");
+                        return true;
+                    }
+                    ifc->setMtu(mtuVal);
+                    ok("MTU port" + to_string(port) + " " + args[0] + " diset ke " + to_string(mtuVal));
+                }
+                else
+                {
+                    err(args[0] + " tidak mendukung mtu.");
+                }
+            }
         }
         else if (args.size() >= 3 && args[1] == "tcp_listen")
         {

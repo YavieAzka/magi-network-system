@@ -218,13 +218,27 @@ void Router::routePacket(Interface *inInterface, const vector<uint8_t> &ipBytes)
     }
     if (pkt.dstIP == "255.255.255.255")
     {
-        // Broadcast di-flood ke semua interface kecuali yang menerimanya
         for (auto &[port, ip] : ifaceIp_)
         {
             Interface *outIfc = getInterface(port);
             if (outIfc && outIfc != inInterface && outIfc->isConnected())
             {
-                outIfc->send(ipBytes); // kirim raw bytes langsung
+                int pathMTU = outIfc->getMtu();
+                if (static_cast<int>(ipBytes.size()) > pathMTU && !pkt.isDontFragment())
+                {
+                    vector<IPv4Packet> frags = pkt.fragment(static_cast<uint16_t>(pathMTU));
+                    string myMac = outIfc->getMacAddress();
+                    string dstMac = "FF:FF:FF:FF:FF:FF";
+                    for (const auto &f : frags)
+                    {
+                        EthernetFrame frame(dstMac, myMac, 0x0800, f.toBytes());
+                        outIfc->send(frame.toBytes());
+                    }
+                }
+                else
+                {
+                    outIfc->send(ipBytes);
+                }
             }
         }
         return;
@@ -331,7 +345,95 @@ void Router::forwardIpPacket(int outPort, const std::string &nextHopIp, const st
         return;
     }
 
+    int pathMTU = outIfc->getMtu();
     string myMac = outIfc->getMacAddress();
+
+    IPv4Packet pkt;
+    try
+    {
+        pkt.deserialize(ipBytes);
+    }
+    catch (const exception &e)
+    {
+        std::cerr << getName() << " forwardIpPacket: failed to parse IP: " << e.what() << "\n";
+        return;
+    }
+
+    uint16_t ipTotalLen = static_cast<uint16_t>(ipBytes.size());
+
+    if (ipTotalLen > static_cast<uint16_t>(pathMTU))
+    {
+        if (pkt.isDontFragment())
+        {
+            cout << "[" << getName() << "] Packet too big (" << ipTotalLen
+                 << " > MTU " << pathMTU << ") and DF set, ICMP Frag Needed\n";
+            Interface *inIfc = nullptr;
+            for (auto &[port, ip] : ifaceIp_)
+            {
+                if (ip == srcForIcmp)
+                {
+                    inIfc = getInterface(port);
+                    break;
+                }
+            }
+            if (!inIfc)
+            {
+                for (int i = 1; i <= 48; ++i)
+                {
+                    Interface *tmp = getInterface(i);
+                    if (tmp && tmp->isConnected())
+                    {
+                        inIfc = tmp;
+                        break;
+                    }
+                }
+            }
+            if (inIfc)
+                sendIcmpFragNeeded(inIfc, ipBytes, static_cast<uint16_t>(pathMTU));
+            return;
+        }
+
+        vector<IPv4Packet> fragments = pkt.fragment(static_cast<uint16_t>(pathMTU));
+        if (fragments.empty())
+        {
+            cerr << "[" << getName() << "] Fragmentation gagal, drop packet\n";
+            return;
+        }
+        if (fragments.size() == 1 && !pkt.isDontFragment())
+        {
+            // doesn't actually need fragmentation
+        }
+        else
+        {
+            cout << "[" << getName() << "] Fragmenting packet " << pkt.srcIP
+                 << " -> " << pkt.dstIP
+                 << " (" << ipTotalLen << " bytes) into "
+                 << fragments.size() << " fragments (MTU=" << pathMTU << ")\n";
+        }
+
+        for (const auto &frag : fragments)
+        {
+            vector<uint8_t> fragBytes = frag.toBytes();
+            if (arpCache_.hasIp(nextHopIp))
+            {
+                string dstMac = arpCache_.getMac(nextHopIp);
+                EthernetFrame frame(dstMac, myMac, 0x0800, fragBytes);
+                outIfc->send(frame.toBytes());
+            }
+            else
+            {
+                cout << "[" << getName() << "] MAC " << nextHopIp
+                     << " unknown, enqueued fragment\n";
+                arpCache_.enqueuePacket(nextHopIp, fragBytes);
+                string myIp = getInterfaceIp(outPort);
+                vector<uint8_t> myMacBytes = NetUtils::stringToMac(myMac);
+                ARPPacket req = ARPPacket::createRequest(myMacBytes, myIp, nextHopIp);
+                EthernetFrame arpFrame("FF:FF:FF:FF:FF:FF", myMac, 0x0806, req.toBytes());
+                outIfc->send(arpFrame.toBytes());
+            }
+        }
+        return;
+    }
 
     if (arpCache_.hasIp(nextHopIp))
     {
@@ -412,6 +514,35 @@ void Router::sendIcmpUnreachable(Interface *inInterface, const vector<uint8_t> &
     if (!route)
     {
         std::cerr << "[" << getName() << "] Error: no route\n";
+        return;
+    }
+    string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
+    forwardIpPacket(route->outPort, nextHop, reply.toBytes(), myIp);
+}
+
+void Router::sendIcmpFragNeeded(Interface *inInterface, const vector<uint8_t> &originalIpBytes, uint16_t nextHopMTU)
+{
+    vector<uint8_t> orig(originalIpBytes.begin(), originalIpBytes.begin() + min((size_t)28, originalIpBytes.size()));
+    ICMPMessage icmp = ICMPMessage::buildFragmentationNeeded(nextHopMTU, orig);
+
+    IPv4Packet origPkt;
+    try
+    {
+        origPkt.deserialize(originalIpBytes);
+    }
+    catch (...)
+    {
+        return;
+    }
+
+    string myIp = routerSrcIp(this, inInterface);
+    IPv4Packet reply(myIp, origPkt.srcIP, IPv4Packet::PROTOCOL_ICMP, 64, icmp.toBytes());
+    reply.checksum = reply.calculateChecksum();
+
+    const RoutingTableEntry *route = longestPrefixMatch(origPkt.srcIP);
+    if (!route)
+    {
+        std::cerr << "[" << getName() << "] Error: no route for Frag Needed ICMP\n";
         return;
     }
     string nextHop = route->nextHopIp.empty() ? origPkt.srcIP : route->nextHopIp;
