@@ -14,6 +14,7 @@ Dikerjakan sebagai Tugas Besar IF2230 Jaringan Komputer.
 - **Library eksternal**: `nlohmann/json` (sudah disertakan via `util/JsonParser`)
 
 Pastikan tools berikut tersedia:
+
 ```bash
 g++ --version   # minimal GCC 9
 cmake --version # minimal 3.14
@@ -47,6 +48,7 @@ cmake --build .
 ```
 
 Program akan masuk ke mode interactive prompt:
+
 ```
 Tubes apaan bikin network simulator
 Ketik 'help' untuk bantuan.
@@ -116,6 +118,7 @@ H1 dhcp_discover
 ### Milestone 4 — HTTP (L7)
 
 Siapkan file HTML terlebih dahulu:
+
 ```bash
 mkdir -p build/www
 cat > build/www/index.html << 'EOF'
@@ -124,6 +127,7 @@ EOF
 ```
 
 Lalu di simulator:
+
 ```
 H2 http_server 80 www
 H1 http_get 192.168.1.20 80 /
@@ -148,29 +152,29 @@ load topology.json
 
 ## Daftar Perintah CLI
 
-| Perintah | Format | Keterangan |
-|----------|--------|------------|
-| create | `create <host\|switch\|router> <nama>` | Buat node baru |
-| link | `link <ep1> <ep2> [delay_ms]` | Sambungkan dua node |
-| unlink | `unlink <ep1> <ep2>` | Putuskan kabel |
-| topology | `topology` | Tampilkan topologi aktif |
-| save | `save [file.json]` | Ekspor topologi ke JSON |
-| load | `load <file.json>` | Muat topologi dari JSON |
-| ping | `<host> ping <IP>` | Kirim ICMP Echo Request |
-| traceroute | `<host> traceroute <IP>` | Lacak rute hop-by-hop |
-| arp | `<host\|router> arp` | Tampilkan ARP cache |
-| route | `<router> route` | Tampilkan routing table |
-| mac | `<switch> mac` | Tampilkan MAC table |
-| set-ip | `<host> set-ip <IP/CIDR>` | Set IP host |
-| set-gw | `<host> set-gw <IP>` | Set default gateway |
-| tcp_listen | `<host> tcp_listen <port>` | Buka port TCP |
-| tcp_connect | `<host> tcp_connect <IP> <port>` | Inisiasi TCP handshake |
-| tcp_send | `<host> tcp_send <port> <msg>` | Kirim data TCP |
-| tcp_close | `<host> tcp_close <port>` | Tutup koneksi TCP |
-| dhcp_server | `<host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]` | Jalankan DHCP server |
-| dhcp_discover | `<host> dhcp_discover` | Minta IP otomatis via DHCP |
-| http_server | `<host> http_server <port> [webroot]` | Jalankan HTTP server |
-| http_get | `<host> http_get <IP> <port> <path>` | Kirim HTTP GET request |
+| Perintah      | Format                                                         | Keterangan                 |
+| ------------- | -------------------------------------------------------------- | -------------------------- |
+| create        | `create <host\|switch\|router> <nama>`                         | Buat node baru             |
+| link          | `link <ep1> <ep2> [delay_ms]`                                  | Sambungkan dua node        |
+| unlink        | `unlink <ep1> <ep2>`                                           | Putuskan kabel             |
+| topology      | `topology`                                                     | Tampilkan topologi aktif   |
+| save          | `save [file.json]`                                             | Ekspor topologi ke JSON    |
+| load          | `load <file.json>`                                             | Muat topologi dari JSON    |
+| ping          | `<host> ping <IP>`                                             | Kirim ICMP Echo Request    |
+| traceroute    | `<host> traceroute <IP>`                                       | Lacak rute hop-by-hop      |
+| arp           | `<host\|router> arp`                                           | Tampilkan ARP cache        |
+| route         | `<router> route`                                               | Tampilkan routing table    |
+| mac           | `<switch> mac`                                                 | Tampilkan MAC table        |
+| set-ip        | `<host> set-ip <IP/CIDR>`                                      | Set IP host                |
+| set-gw        | `<host> set-gw <IP>`                                           | Set default gateway        |
+| tcp_listen    | `<host> tcp_listen <port>`                                     | Buka port TCP              |
+| tcp_connect   | `<host> tcp_connect <IP> <port>`                               | Inisiasi TCP handshake     |
+| tcp_send      | `<host> tcp_send <port> <msg>`                                 | Kirim data TCP             |
+| tcp_close     | `<host> tcp_close <port>`                                      | Tutup koneksi TCP          |
+| dhcp_server   | `<host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]` | Jalankan DHCP server       |
+| dhcp_discover | `<host> dhcp_discover`                                         | Minta IP otomatis via DHCP |
+| http_server   | `<host> http_server <port> [webroot]`                          | Jalankan HTTP server       |
+| http_get      | `<host> http_get <IP> <port> <path>`                           | Kirim HTTP GET request     |
 
 ---
 
@@ -205,16 +209,16 @@ tugas-besar-jarkom-tamat_sudah/
 
 ## Pembagian Tugas
 
-| NIM | Nama | Jobdesc |
-|-----|------|---------|
-| 13524027 | Aufa Rienaldifaza Ahmad | — |
-| 13524041 | Nathan Adhika Santosa | M0: Header & Payload; M1: Host CLI; M2: Integrate & CLI milestone 2; M3: Integrate & CLI milestone 3; M4: MagiSocket |
-| 13524049 | Arina Azka | M0: Packet; M1: Ethernet & VLAN; M2: Host; M3: UDP; M4: DNS |
-| 13524079 | Angelina Andra Alanna | M0: Link, Interface; M4 P5: HTTPClient, URL parser, CLI integration (http_get, http_server, dhcp_discover, dhcp_server), end-to-end testing, README, Bonus: Topology Visualizer |
-| 13524077 | Yavie Azka Putra Araly | M0: CLI, Integration; M1: ARP; M2: ICMP; M3: TCP state machine & 3-way handshake; M4: DHCP; Bonus: RIP |
+| NIM      | Nama                    | Jobdesc                                                                                                                                                                         |
+| -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13524027 | Aufa Rienaldifaza Ahmad | M0: JSON Parser, Topology Parser; M1: String to IP and Mac, Integration; M2: Router; M3: TCP 3 way handshake and 4 way teardown; M4: HTTP; Bonus: IP fragmentation & Reassembly |
+| 13524041 | Nathan Adhika Santosa   | M0: Header & Payload; M1: Host CLI; M2: Integrate & CLI milestone 2; M3: Integrate & CLI milestone 3; M4: MagiSocket                                                            |
+| 13524049 | Arina Azka              | M0: Packet; M1: Ethernet & VLAN; M2: Host; M3: UDP; M4: DNS                                                                                                                     |
+| 13524079 | Angelina Andra Alanna   | M0: Link, Interface; M4 P5: HTTPClient, URL parser, CLI integration (http_get, http_server, dhcp_discover, dhcp_server), end-to-end testing, README, Bonus: Topology Visualizer |
+| 13524077 | Yavie Azka Putra Araly  | M0: CLI, Integration; M1: ARP; M2: ICMP; M3: TCP state machine & 3-way handshake; M4: DHCP; Bonus: RIP                                                                          |
 
 ---
 
 ## Bahasa Pemrograman
 
-C++ 
+C++
