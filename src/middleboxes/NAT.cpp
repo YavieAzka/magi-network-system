@@ -54,6 +54,7 @@ bool NAT::translateInbound(uint16_t publicPort,
 }
 
 void NAT::printTable() const {
+    std::cout << std::dec << std::setfill(' ');
     std::cout << "\n--- NAT Translation Table ---\n";
     std::cout << std::left
               << std::setw(22) << "Private"
