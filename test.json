@@ -1,0 +1,69 @@
+{
+  "hosts": [
+    {
+      "name": "H1",
+      "ip_address": "192.168.1.10/24",
+      "default_gateway": "192.168.1.1"
+    },
+    {
+      "name": "H2",
+      "ip_address": "192.168.2.10/24",
+      "default_gateway": "192.168.2.1"
+    },
+    {
+      "name": "H3",
+      "ip_address": "172.16.0.10/24",
+      "default_gateway": "172.16.0.1"
+    },
+    {
+      "name": "DHCP_SRV",
+      "ip_address": "192.168.1.100/24",
+      "default_gateway": "192.168.1.1"
+    }
+  ],
+  "switches": [],
+  "routers": [
+    {
+      "name": "R1",
+      "interfaces": [
+        { "port": 1, "ip_address": "192.168.1.1/24" },
+        { "port": 2, "ip_address": "192.168.2.1/24" },
+        { "port": 3, "ip_address": "10.0.0.254/24" },
+        { "port": 4, "ip_address": "192.168.1.2/24" }
+      ],
+      "routing_table": [
+        {
+          "destination": "172.16.0.0/24",
+          "next_hop": "10.0.0.2",
+          "interface": 3
+        }
+      ]
+    },
+    {
+      "name": "R2",
+      "interfaces": [
+        { "port": 1, "ip_address": "10.0.0.2/24" },
+        { "port": 2, "ip_address": "172.16.0.1/24" }
+      ],
+      "routing_table": [
+        {
+          "destination": "192.168.1.0/24",
+          "next_hop": "10.0.0.254",
+          "interface": 1
+        },
+        {
+          "destination": "192.168.2.0/24",
+          "next_hop": "10.0.0.254",
+          "interface": 1
+        }
+      ]
+    }
+  ],
+  "links": [
+    { "endpoints": ["H1", "R1:1"], "delay": 0 },
+    { "endpoints": ["H2", "R1:2"], "delay": 0 },
+    { "endpoints": ["R1:3", "R2:1"], "delay": 0 },
+    { "endpoints": ["H3", "R2:2"], "delay": 0 },
+    { "endpoints": ["DHCP_SRV", "R1:4"], "delay": 0 }
+  ]
+}

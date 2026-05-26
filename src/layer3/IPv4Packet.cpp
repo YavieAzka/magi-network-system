@@ -125,3 +125,82 @@ void IPv4Packet::decrementTTL()
     ttl--;
     checksum = calculateChecksum();
 }
+
+bool IPv4Packet::isFragment() const
+{
+    return isMoreFragments() || getFragmentOffset() > 0;
+}
+
+bool IPv4Packet::isMoreFragments() const
+{
+    return (flagsFragment & FLAG_MF) != 0;
+}
+
+bool IPv4Packet::isDontFragment() const
+{
+    return (flagsFragment & FLAG_DF) != 0;
+}
+
+uint16_t IPv4Packet::getFragmentOffset() const
+{
+    return (flagsFragment & FRAGMENT_OFFSET_MASK) * 8;
+}
+
+std::vector<IPv4Packet> IPv4Packet::fragment(uint16_t pathMTU) const
+{
+    std::vector<IPv4Packet> result;
+
+    uint16_t headerLen = static_cast<uint16_t>(ihl) * 4;
+    uint16_t maxData = pathMTU - headerLen;
+    if (maxData < 8)
+        return result;
+
+    // round down to multiple of 8
+    maxData &= 0xFFF8U;
+
+    uint16_t ipPktSize = static_cast<uint16_t>(toBytes().size());
+    if (ipPktSize <= pathMTU)
+    {
+        result.push_back(*this);
+        return result;
+    }
+
+    if (isDontFragment())
+        return result;
+
+    const uint8_t *data = payload.data();
+    size_t dataLen = payload.size();
+    size_t offset = 0;
+
+    while (offset < dataLen)
+    {
+        size_t chunkSize = std::min(static_cast<size_t>(maxData), dataLen - offset);
+        if (offset + chunkSize < dataLen)
+            chunkSize &= ~static_cast<size_t>(7);
+
+        IPv4Packet frag;
+        frag.version = version;
+        frag.ihl = ihl;
+        frag.tos = tos;
+        frag.identification = identification;
+        frag.ttl = ttl;
+        frag.protocol = protocol;
+        frag.srcIP = srcIP;
+        frag.dstIP = dstIP;
+        frag.payload.assign(data + offset, data + offset + chunkSize);
+
+        uint16_t flags = 0;
+        if (flagsFragment & FLAG_DF) flags |= FLAG_DF;
+        if (offset + chunkSize < dataLen) flags |= FLAG_MF;
+        uint16_t fragOff = static_cast<uint16_t>(offset / 8);
+        frag.flagsFragment = flags | fragOff;
+
+        frag.totalLen = static_cast<uint16_t>(headerLen + chunkSize);
+        frag.checksum = frag.calculateChecksum();
+
+        result.push_back(frag);
+        offset += chunkSize;
+    }
+
+    return result;
+}

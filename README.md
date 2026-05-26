@@ -1,138 +1,224 @@
-# Milestone 4 WBS — Magi System
-Socket API & Application Layer (L7) · 5 orang · C++
+# Magi System — OSI Layer Network Simulator
+
+Simulator jaringan berbasis OSI Layer yang dibangun dari nol menggunakan C++, tanpa menggunakan library jaringan bawaan sistem operasi. Proyek ini mensimulasikan komunikasi data dari Layer 2 hingga Layer 7, mencakup Ethernet, ARP, IPv4, ICMP, TCP, UDP, DHCP, DNS, dan HTTP.
+
+Dikerjakan sebagai Tugas Besar IF2230 Jaringan Komputer.
 
 ---
 
-## P1 — MagiSocket API
+## Prerequisites
 
-| Task | Deliverables |
-|------|-------------|
-| `MagiSocket` class | `include/layer7/MagiSocket.hpp` — field: `host_node`, `family` (AF_INET=2), `sock_type` (SOCK_STREAM=1, SOCK_DGRAM=2), internal transport pointer |
-| `MagiSocket::bind()` | Ikat socket ke IP & port tertentu pada node |
-| `MagiSocket::listen()` | Set socket ke mode passive open (wrap `TCPSocket::passiveOpen()`) |
-| `MagiSocket::accept()` | Tunggu koneksi masuk, return socket baru yang sudah ESTABLISHED |
-| `MagiSocket::connect()` | Inisiasi active open ke IP:port tujuan (wrap `TCPSocket::activeOpen()`) |
-| `MagiSocket::send()` | Kirim bytes lewat transport layer (TCP atau UDP) |
-| `MagiSocket::recv()` | Baca bytes dari receive buffer transport layer |
-| `MagiSocket::close()` | Trigger 4-way teardown untuk TCP, cleanup resource |
-| Build system | Tambah `add_library(layer7 ...)` di `CMakeLists.txt`, link ke `core layer4` |
-| Unit testing | Test bind/connect/send/recv/close dengan dua host dalam satu subnet |
+- **Compiler**: GCC / G++ dengan dukungan C++17
+- **Build tool**: CMake 3.14 atau lebih baru
+- **OS**: Linux / WSL (Windows Subsystem for Linux)
+- **Library eksternal**: `nlohmann/json` (sudah disertakan via `util/JsonParser`)
 
----
+Pastikan tools berikut tersedia:
 
-## P2 — DHCP + Host UDP Routing Patch
-
-| Task | Deliverables |
-|------|-------------|
-| `DHCPMessage` struct | `include/layer7/DHCPMessage.hpp` — field: op, htype, hlen, xid, ciaddr, yiaddr, siaddr, chaddr, options |
-| `DHCPMessage::toBytes()` | Serialize ke byte array sesuai format BOOTP/DHCP |
-| `DHCPMessage::deserialize()` | Parse raw bytes jadi `DHCPMessage` object |
-| `DHCPServer` class | `src/layer7/DHCPServer.cpp` — IP pool (range), lease map `mac→ip`, exclude gateway & broadcast |
-| DORA flow — server side | Terima Discover (broadcast) → kirim Offer (unicast) → terima Request → kirim ACK |
-| `DHCPClient` class | `src/layer7/DHCPClient.cpp` — kirim Discover, terima Offer, kirim Request, terima ACK |
-| Host update setelah ACK | Panggil `Host::setIpAddress()` dan `Host::setDefaultGateway()` dengan nilai dari ACK |
-| CLI integration | Dispatch `H1 dhcp_discover` di `cli.cpp` ke `DHCPClient` |
-| **Host UDP routing patch** | Tambah `udpSockets_` map di `Host` (pola sama dengan `tcpSockets_` yang sudah ada) |
-| **`handleUDPSegment()` patch** | Isi implementasi dispatch ke socket yang listening di `dstPort` yang sesuai — **saat ini masih stub di M3** |
-| Unit testing | Test DORA flow antara satu DHCPServer dan satu DHCPClient, test UDP routing patch |
-
----
-
-## P3 — DNS
-
-| Task | Deliverables |
-|------|-------------|
-| `DNSMessage` struct | `include/layer7/DNSMessage.hpp` — field: id, flags, QNAME (string), RDATA (IP string). Cukup support A record |
-| `DNSMessage::toBytes()` | Serialize ke byte array format DNS minimal |
-| `DNSMessage::deserialize()` | Parse raw bytes jadi `DNSMessage` object |
-| `DNSServer` class | `src/layer7/DNSServer.cpp` — record store `unordered_map<string,string>` (domain→IP), listen UDP port 53 |
-| `DNSClient` class | `src/layer7/DNSClient.cpp` — expose fungsi `resolve(hostIp, domain) → string` yang bisa dipanggil HTTPClient |
-| Record loading | Opsional: load record dari field `"dns_records"` di topology JSON |
-| Integrasi ke HTTP flow | `DNSClient::resolve()` dipanggil di HTTPClient P5 saat URL berupa domain bukan IP |
-| Unit testing | Test resolve "www.magi.com" → "10.0.0.5", test domain tidak ditemukan |
-
----
-
-## P4 — HTTP Server
-
-| Task | Deliverables |
-|------|-------------|
-| `HTTPServer` class | `include/layer7/HTTPServer.hpp` — field: `server_socket` (MagiSocket), `web_root` (path file), `running` flag |
-| HTTP request parser | Parse request line `GET /path HTTP/1.1` dan header `Host:` dari raw bytes |
-| HTTP response builder | Bangun string `HTTP/1.1 200 OK\r\nContent-Length: N\r\n\r\n{body}` sebagai fungsi murni |
-| File serving | Baca file dari disk jika ada, fallback ke hardcoded HTML jika tidak ada |
-| `HTTPServer::start(file)` | Bind port 80, listen, loop terima koneksi → parse → serve → close |
-| `HTTPServer::stop()` | Set `running=false`, close server socket |
-| CLI integration | Dispatch `H1 http_server start index.html` dan `H1 http_server stop` di `cli.cpp` |
-| Unit testing | Test start/stop, test request GET valid, test file tidak ditemukan |
-
----
-
-## P5 — HTTP Client, CLI & End-to-End Testing
-
-| Task | Deliverables |
-|------|-------------|
-| `HTTPClient` class | `include/layer7/HTTPClient.hpp` — fungsi `get(host, url) → string` |
-| URL parser | Parse `www.magi.com` atau `10.0.0.5` — deteksi apakah domain atau IP langsung |
-| DNS integration | Jika domain, panggil `DNSClient::resolve()` dari P3 sebelum connect |
-| HTTP GET flow | `connect(ip, 80)` → kirim `GET / HTTP/1.1\r\nHost: ...\r\n\r\n` → terima response → print body |
-| CLI integration | Tambah handler `H1 http_get <url>` di `cli.cpp` |
-| Unit testing | Test `http_get` ke IP langsung, test `http_get` ke domain lewat DNS |
-| **End-to-end testing** | Skenario lengkap: load topology → `dhcp_discover` → `http_server start` → `http_get www.nerv.com` lintas router, pastikan log tiap layer tercetak |
-| **README update** | Dokumentasi cara run dan test semua perintah M4 |
-
----
-
-## Urutan pengerjaan
-
-### Fase 1 — Paralel (mulai sekarang)
-
-| Orang | Yang dikerjakan |
-|-------|----------------|
-| **P1** | Implement MagiSocket penuh — ini blocker, prioritas tertinggi |
-| **P2** | Desain byte layout DHCPMessage, tulis serialize/deserialize, siapkan IP pool logic, **kerjakan patch `udpSockets_` & `handleUDPSegment()` di Host** |
-| **P3** | Desain DNSMessage format, isi record table statis, tulis serialize/deserialize |
-| **P4** | Tulis HTTP request parser dan response builder sebagai fungsi murni, unit test tanpa socket |
-| **P5** | Tambah CLI handler stub untuk `http_get`, `http_server`, tulis URL parser |
-
-> P2 **wajib** menyelesaikan patch `handleUDPSegment()` di fase ini agar P3 bisa langsung test di fase 2.
-
-### Fase 2 — Integrasi protokol (setelah P1 merge)
-
-| Orang | Yang dikerjakan |
-|-------|----------------|
-| **P1** | Fix bug MagiSocket yang muncul saat dipakai P2/P3/P4, review PR |
-| **P2** | Wiring DHCP ke MagiSocket UDP, test DORA flow, pastikan Host update IP setelah ACK |
-| **P3** | Wiring DNS ke MagiSocket UDP, test resolve domain lewat simulator — **bisa jalan setelah P2 selesai patch** |
-| **P4** | Wiring HTTPServer ke MagiSocket TCP, test `http_server start/stop` |
-| **P5** | Wiring HTTPClient ke socket + DNS P3, test `http_get` ke IP langsung dulu, lalu ke domain |
-
-### Fase 3 — End-to-end & demo prep (semua merge)
-
-Semua merge, **P5 memimpin** end-to-end test: jalankan skenario demo lengkap lintas subnet, pastikan log tiap layer tercetak, fix bug bersama, P5 update README.
-
----
-
-## Dependency pengerjaan
-
-```
-P1 (MagiSocket)
-    ↓
-    ├── P2 (DHCP + patch udpSockets_) ──┐
-    │         ↓                         │
-    │    P3 bisa test                   │
-    │         │                         │
-    ├── P3 (DNS) ───────────────────────┤
-    │                                   │
-    └── P4 (HTTP Server) ───────────────┤
-                                        │
-                                   P5 (HTTP Client & CLI & e2e testing)
+```bash
+g++ --version   # minimal GCC 9
+cmake --version # minimal 3.14
+make --version
 ```
 
-| Orang | Bisa mulai | Blokir sampai |
-|-------|-----------|---------------|
-| P1 | Sekarang | — |
-| P2 | Sekarang (logic + patch Host), test setelah P1 | P1 merge |
-| P3 | Sekarang (logic), test setelah P2 selesai patch | P1 merge + P2 selesai `udpSockets_` |
-| P4 | Sekarang (logic), test setelah P1 | P1 merge |
-| P5 | Sekarang (CLI stub), full test setelah semua merge | P1 + P3 + P4 merge |
+---
+
+## Cara Setup dan Run
+
+### 1. Clone repository
+
+```bash
+git clone <url-repo>
+cd tugas-besar-jarkom-tamat_sudah
+```
+
+### 2. Build
+
+```bash
+mkdir -p build
+cd build
+cmake ..
+cmake --build .
+```
+
+### 3. Jalankan simulator
+
+```bash
+./jarkom
+```
+
+Program akan masuk ke mode interactive prompt:
+
+```
+Tubes apaan bikin network simulator
+Ketik 'help' untuk bantuan.
+
+tamat-sudah>
+```
+
+---
+
+## Cara Test Semua Perintah
+
+### Setup topologi dasar
+
+```
+create host H1
+create host H2
+create switch SW1
+link H1 SW1:1 10
+link H2 SW1:2 10
+H1 set-ip 192.168.1.10/24
+H1 set-gw 192.168.1.1
+H2 set-ip 192.168.1.20/24
+H2 set-gw 192.168.1.1
+```
+
+### Milestone 1 — Ping dalam subnet (L2)
+
+```
+H1 ping 192.168.1.20
+H1 arp
+SW1 mac
+```
+
+### Milestone 2 — Routing lintas subnet (L3)
+
+```
+create host H3
+create router R1
+link SW1:3 R1:1 5
+link H3 R1:2 10
+R1 set-ip 1 192.168.1.1/24
+R1 set-ip 2 10.0.0.1/24
+H1 set-gw 192.168.1.1
+H3 set-ip 10.0.0.10/24
+H3 set-gw 10.0.0.1
+H1 ping 10.0.0.10
+H1 traceroute 10.0.0.10
+R1 route
+```
+
+### Milestone 3 — TCP Handshake (L4)
+
+```
+H2 tcp_listen 8080
+H1 tcp_connect 192.168.1.20 8080
+H1 tcp_send 12345 "hello"
+H1 tcp_close 12345
+```
+
+### Milestone 4 — DHCP (L7)
+
+```
+H2 dhcp_server start 192.168.1.100 192.168.1.200 192.168.1.1 24
+H1 dhcp_discover
+```
+
+### Milestone 4 — HTTP (L7)
+
+Siapkan file HTML terlebih dahulu:
+
+```bash
+mkdir -p build/www
+cat > build/www/index.html << 'EOF'
+<html><body><h1>Hello from Magi System</h1></body></html>
+EOF
+```
+
+Lalu di simulator:
+
+```
+H2 http_server 80 www
+H1 http_get 192.168.1.20 80 /
+```
+
+### End-to-end — HTTP lintas router
+
+```
+H3 http_server 80 www
+H1 http_get 10.0.0.10 80 /
+```
+
+### Manajemen topologi
+
+```
+topology
+save topology.json
+load topology.json
+```
+
+---
+
+## Daftar Perintah CLI
+
+| Perintah      | Format                                                         | Keterangan                 |
+| ------------- | -------------------------------------------------------------- | -------------------------- |
+| create        | `create <host\|switch\|router> <nama>`                         | Buat node baru             |
+| link          | `link <ep1> <ep2> [delay_ms]`                                  | Sambungkan dua node        |
+| unlink        | `unlink <ep1> <ep2>`                                           | Putuskan kabel             |
+| topology      | `topology`                                                     | Tampilkan topologi aktif   |
+| save          | `save [file.json]`                                             | Ekspor topologi ke JSON    |
+| load          | `load <file.json>`                                             | Muat topologi dari JSON    |
+| ping          | `<host> ping <IP>`                                             | Kirim ICMP Echo Request    |
+| traceroute    | `<host> traceroute <IP>`                                       | Lacak rute hop-by-hop      |
+| arp           | `<host\|router> arp`                                           | Tampilkan ARP cache        |
+| route         | `<router> route`                                               | Tampilkan routing table    |
+| mac           | `<switch> mac`                                                 | Tampilkan MAC table        |
+| set-ip        | `<host> set-ip <IP/CIDR>`                                      | Set IP host                |
+| set-gw        | `<host> set-gw <IP>`                                           | Set default gateway        |
+| tcp_listen    | `<host> tcp_listen <port>`                                     | Buka port TCP              |
+| tcp_connect   | `<host> tcp_connect <IP> <port>`                               | Inisiasi TCP handshake     |
+| tcp_send      | `<host> tcp_send <port> <msg>`                                 | Kirim data TCP             |
+| tcp_close     | `<host> tcp_close <port>`                                      | Tutup koneksi TCP          |
+| dhcp_server   | `<host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]` | Jalankan DHCP server       |
+| dhcp_discover | `<host> dhcp_discover`                                         | Minta IP otomatis via DHCP |
+| http_server   | `<host> http_server <port> [webroot]`                          | Jalankan HTTP server       |
+| http_get      | `<host> http_get <IP> <port> <path>`                           | Kirim HTTP GET request     |
+
+---
+
+## Struktur Direktori
+
+```
+tugas-besar-jarkom-tamat_sudah/
+├── CMakeLists.txt
+├── Makefile
+├── README.md
+├── topology.json
+├── include/
+│   ├── core/          # Node, Interface, Link, Packet (M0)
+│   ├── layer2/        # EthernetFrame, ARP, Switch (M1)
+│   ├── layer3/        # IPv4Packet, ICMPMessage (M2)
+│   ├── layer4/        # TCPSocket, TCPSegment, UDPSegment (M3)
+│   ├── layer7/        # MagiSocket, DHCP, DNS, HTTP (M4)
+│   └── util/
+├── src/
+│   ├── core/
+│   ├── layer2/
+│   ├── layer3/
+│   ├── layer4/
+│   ├── layer7/
+│   ├── util/
+│   ├── cli.cpp
+│   └── main.cpp
+└── tests/
+```
+
+---
+
+## Pembagian Tugas
+
+| NIM      | Nama                    | Jobdesc                                                                                                                                                                         |
+| -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13524027 | Aufa Rienaldifaza Ahmad | M0: JSON Parser, Topology Parser; M1: String to IP and Mac, Integration; M2: Router; M3: TCP 3 way handshake and 4 way teardown; M4: HTTP; Bonus: IP fragmentation & Reassembly |
+| 13524041 | Nathan Adhika Santosa   | M0: Header & Payload; M1: Host CLI; M2: Integrate & CLI milestone 2; M3: Integrate & CLI milestone 3; M4: MagiSocket                                                            |
+| 13524049 | Arina Azka              | M0: Packet; M1: Ethernet & VLAN; M2: Host; M3: UDP; M4: DNS                                                                                                                     |
+| 13524079 | Angelina Andra Alanna   | M0: Link, Interface; M4 P5: HTTPClient, URL parser, CLI integration (http_get, http_server, dhcp_discover, dhcp_server), end-to-end testing, README, Bonus: Topology Visualizer |
+| 13524077 | Yavie Azka Putra Araly  | M0: CLI, Integration; M1: ARP; M2: ICMP; M3: TCP state machine & 3-way handshake; M4: DHCP; Bonus: RIP                                                                          |
+
+---
+
+## Bahasa Pemrograman
+
+C++

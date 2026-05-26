@@ -14,7 +14,9 @@ namespace ICMP
  
     constexpr uint8_t CODE_NET_UNREACHABLE  = 0;
     constexpr uint8_t CODE_HOST_UNREACHABLE = 1;
+    constexpr uint8_t CODE_PROT_UNREACHABLE  = 2;
     constexpr uint8_t CODE_PORT_UNREACHABLE = 3;
+    constexpr uint8_t CODE_FRAG_NEEDED      = 4;
 
     constexpr uint8_t CODE_TTL_EXCEEDED = 0;
 
@@ -61,4 +63,7 @@ class ICMPMessage : public Packet{
  
     static ICMPMessage buildUnreachable(const std::vector<uint8_t>& originalHeader,
                                         uint8_t code = ICMP::CODE_NET_UNREACHABLE);
+
+    static ICMPMessage buildFragmentationNeeded(uint16_t nextHopMTU,
+                                                const std::vector<uint8_t>& originalHeader);
 };

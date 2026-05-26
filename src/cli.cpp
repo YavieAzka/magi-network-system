@@ -6,7 +6,17 @@
 #include "core/Host.hpp"
 #include "core/Router.hpp"
 #include "layer2/Switch.hpp"
+#include "layer7/HTTPMessage.hpp"
+#include "util/TopologyVisualizer.hpp"
+#include "layer7/DHCPClient.hpp"
+#include "layer7/DHCPServer.hpp"
+#include "core/Interface.hpp"
+#include <map>
 using namespace std;
+
+// Global map: nama host -> DHCPServer yang sedang berjalan
+map<string, DHCPServer *> g_dhcpServers;
+// Note: HTTPClient dan HTTPServer tidak dipakai di cli — pakai host->httpGet() dan host->startHTTPServer()
 
 #define C_OK "\033[32m"
 #define C_ERR "\033[31m"
@@ -175,14 +185,32 @@ void CLI::handleTopology(const vector<string> &)
 void CLI::handleHelp(const vector<string> &)
 {
     cout << "\nDaftar Perintah:\n"
-            "  create <host|switch|router> <nama>  Buat node baru\n"
-            "  link   <ep1> <ep2> [delay_ms]       Sambungkan dua node\n"
-            "  unlink <ep1> <ep2>                  Putuskan kabel\n"
-            "  topology                            Tampilkan state di memori\n"
-            "  save   [file.json]                  Ekspor ke JSON\n"
-            "  load   <file.json>                  Impor dari JSON\n"
-            "  help                                Daftar perintah ini\n"
-            "  exit / quit                         Keluar\n"
+            "  create   <host|switch|router> <nama>        Buat node baru\n"
+            "  link     <ep1> <ep2> [delay_ms]             Sambungkan dua node\n"
+            "  unlink   <ep1> <ep2>                        Putuskan kabel\n"
+            "  topology                                    Tampilkan state di memori\n"
+            "  save     [file.json]                        Ekspor ke JSON\n"
+            "  load     <file.json>                        Impor dari JSON\n"
+            "  help                                        Daftar perintah ini\n"
+            "  exit / quit                                 Keluar\n"
+            "  <host>   set-ip <IP/CIDR>                   Set IP host\n"
+            "  <host>   set-gw <IP>                        Set gateway host\n"
+            "  <host>   ping <IP> [count]                  Kirim ICMP ping\n"
+            "  <host>   traceroute <IP>                    Lacak rute hop L3\n"
+            "  <host>   arp                                Tampilkan ARP cache host\n"
+            "  <host>   udp_send <dIP> <dPort> <sPort> <m> Kirim datagram UDP\n"
+            "  <host>   tcp_listen <port>                  Buka port TCP LISTEN\n"
+            "  <host>   tcp_connect <IP> <port>            Inisiasi TCP Handshake\n"
+            "  <host>   tcp_send <port> <msg>              Kirim data TCP PSH|ACK\n"
+            "  <host>   tcp_close <port>                   Initiate TCP teardown\n"
+            "  <host>   http_server <port> [webroot]         Start HTTP server on port\n"
+            "  <host>   http_get <IP> <port> <path>         Send HTTP GET request\n"
+            "  <router> set-ip <port> <IP/CIDR>            Set IP port router\n"
+            "  <router> ip route <net> <hop> <port>        Tambah static route\n"
+            "  <router> route                              Tampilkan routing table\n"
+            "  <router> arp                                Tampilkan ARP cache router\n"
+            "  <switch> mac / mactable                     Tampilkan MAC table\n"
+            "  <node>   mtu <port> <value>                 Set MTU interface (68-9000)\n"
             "\nFormat endpoint: NamaNode  atau  NamaNode:NomorPort\n"
             "  Contoh: link H1 SW1:3 10\n\n";
 }
@@ -209,10 +237,12 @@ bool CLI::processCommand(const string &line)
         Switch *sw = dynamic_cast<Switch *>(maybeNode);
         if (args.size() >= 2 && args[1] == "arp")
         {
-            if(host){
+            if (host)
+            {
                 host->printArpCache();
             }
-            else if(router){
+            else if (router)
+            {
                 router->printArpCache();
             }
             else
@@ -232,39 +262,88 @@ bool CLI::processCommand(const string &line)
             int count = (args.size() >= 4) ? stoi(args[3]) : 4;
             host->ping(args[2], count);
         }
+        else if (args.size() >= 4 && args[1] == "tcp_connect")
+        {
+            if (host)
+            {
+                string destIp = args[2];
+                uint16_t destPort = stoi(args[3]);
+                host->tcpConnect(destIp, destPort);
+                ok("Memicu tcpConnect ke " + destIp + ":" + to_string(destPort));
+            }
+            else
+            {
+                err("Hanya host yang bisa melakukan tcp_connect.");
+            }
+        }
+        else if (args.size() >= 6 && args[1] == "udp_send")
+        {
+            if (host)
+            {
+                string destIp = args[2];
+                uint16_t destPort = stoi(args[3]);
+                uint16_t srcPort = stoi(args[4]);
+                string message = args[5];
+                for (size_t i = 6; i < args.size(); ++i)
+                {
+                    message += " " + args[i];
+                }
+
+                vector<uint8_t> payload(message.begin(), message.end());
+                host->sendUDP(destIp, destPort, srcPort, payload);
+                ok("Datagram UDP terkirim dari " + host->getName());
+            }
+            else
+            {
+                err("Hanya host yang bisa melakukan udp_send.");
+            }
+        }
+
         else if (args.size() >= 3 && args[1] == "set-ip")
         {
-            if (host) {
+            if (host)
+            {
                 // Format: h1 set-ip 192.168.1.10/24
                 host->setIpAddress(args[2]);
-            } else if (router) {
+            }
+            else if (router)
+            {
                 // Format: r1 set-ip 1 192.168.1.1/24
-                if (args.size() < 4) {
+                if (args.size() < 4)
+                {
                     err("Penggunaan: <NamaRouter> set-ip <port> <IP/CIDR>");
                     return true;
                 }
                 int port = stoi(args[2]);
                 router->setInterfaceIp(port, args[3]);
-            } else {
+            }
+            else
+            {
                 err(args[0] + " tidak mendukung set-ip (hanya host/router).");
             }
         }
         else if (args.size() >= 3 && args[1] == "set-gw")
         {
-            if (host) {
+            if (host)
+            {
                 host->setDefaultGateway(args[2]);
-            } else {
+            }
+            else
+            {
                 err("Hanya host yang mendukung set-gw.");
             }
         }
         else if (args.size() >= 6 && args[1] == "ip" && args[2] == "route")
         {
-            if (router) {
-                string nextHop = (args[4] == "-") ? "" : args[4]; 
+            if (router)
+            {
+                string nextHop = (args[4] == "-") ? "" : args[4];
                 int outPort = stoi(args[5]);
                 router->addRoute(args[3], nextHop, outPort);
                 ok("Route berhasil ditambahkan ke " + router->getName());
-            } else {
+            }
+            else
+            {
                 err("Perintah ip route hanya untuk router.");
             }
         }
@@ -277,7 +356,7 @@ bool CLI::processCommand(const string &line)
             }
             host->traceroute(args[2]);
         }
-        else if(args.size() >= 3 && args[1] == "route")
+        else if (args.size() >= 2 && args[1] == "route")
         {
             if (!router)
             {
@@ -288,11 +367,282 @@ bool CLI::processCommand(const string &line)
         }
         else if (args.size() >= 2 && (args[1] == "mac" || args[1] == "mactable"))
         {
-            if (!sw) {
+            if (!sw)
+            {
                 err(args[0] + " bukan switch");
                 return true;
             }
             sw->printMACTable();
+        }
+        else if (args.size() >= 2 && args[1] == "mtu")
+        {
+            if (args.size() < 3)
+            {
+                err("Penggunaan: <node> mtu <port> <value>");
+                return true;
+            }
+            int port = 1;
+            int mtuVal = 1500;
+            if (maybeNode)
+            {
+                if (host || router || sw)
+                {
+                    if (args.size() >= 4)
+                    {
+                        port = stoi(args[2]);
+                        mtuVal = stoi(args[3]);
+                    }
+                    else if (args.size() >= 3)
+                    {
+                        mtuVal = stoi(args[2]);
+                    }
+                    Interface *ifc = maybeNode->getInterface(port);
+                    if (!ifc)
+                    {
+                        err("Port " + to_string(port) + " tidak ditemukan di " + args[0]);
+                        return true;
+                    }
+                    if (mtuVal < 68)
+                    {
+                        err("MTU minimum adalah 68 byte (IP minimum)");
+                        return true;
+                    }
+                    if (mtuVal > 9000)
+                    {
+                        err("MTU maximum adalah 9000 byte (jumbo frame)");
+                        return true;
+                    }
+                    ifc->setMtu(mtuVal);
+                    ok("MTU port" + to_string(port) + " " + args[0] + " diset ke " + to_string(mtuVal));
+                }
+                else
+                {
+                    err(args[0] + " tidak mendukung mtu.");
+                }
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "tcp_listen")
+        {
+            if (host)
+            {
+                uint16_t port = stoi(args[2]);
+                host->tcpListen(port);
+                ok("Host " + host->getName() + " sekarang LISTEN di port " + to_string(port));
+            }
+            else
+            {
+                err("Hanya host yang bisa listen port TCP.");
+            }
+        }
+        else if (args.size() >= 4 && args[1] == "tcp_send")
+        {
+            if (host)
+            {
+                uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
+                string message = args[3];
+                for (size_t i = 4; i < args.size(); ++i)
+                {
+                    message += " " + args[i];
+                }
+
+                host->tcpSend(srcPort, message);
+                ok("Perintah tcp_send dieksekusi.");
+            }
+            else
+            {
+                err("Hanya host yang bisa melakukan tcp_send.");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "tcp_close")
+        {
+            if (host)
+            {
+                uint16_t srcPort = static_cast<uint16_t>(stoi(args[2]));
+                host->tcpClose(srcPort);
+                ok("Connection on port " + to_string(srcPort) + " closed.");
+            }
+            else
+            {
+                err("Only hosts can tcp_close.");
+            }
+        }
+
+        else if (args.size() >= 2 && args[1] == "http_server")
+        {
+            if (!host)
+            {
+                err("http_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start")
+            {
+                string webRoot = (args.size() >= 4) ? args[3] : "";
+                host->startHTTPServer(80, webRoot);
+                ok("HTTP server started on port 80");
+            }
+            else if (args.size() >= 3 && args[2] == "stop")
+            {
+                // stop: close port 80
+                auto &sockets = host->getTcpSockets();
+                if (sockets.count(80))
+                {
+                    sockets[80]->close();
+                    delete sockets[80];
+                    sockets.erase(80);
+                    ok("HTTP server di " + host->getName() + " dihentikan.");
+                }
+                else
+                {
+                    err("Tidak ada HTTP server yang berjalan di " + host->getName());
+                }
+            }
+            else
+            {
+                err("Penggunaan: <host> http_server start [file] | stop");
+            }
+        }
+
+        else if (args.size() >= 3 && args[1] == "http_get")
+        {
+            if (!host)
+            {
+                err("http_get hanya untuk host.");
+                return true;
+            }
+            string url = args[2];
+
+            // Parse url jadi ip/domain dan path
+            string urlHost, urlPath;
+            // hapus http:// kalau ada
+            string s = url;
+            if (s.substr(0, 7) == "http://")
+                s = s.substr(7);
+            size_t slashPos = s.find('/');
+            if (slashPos == string::npos)
+            {
+                urlHost = s;
+                urlPath = "/";
+            }
+            else
+            {
+                urlHost = s.substr(0, slashPos);
+                urlPath = s.substr(slashPos);
+            }
+
+            host->httpGet(urlHost, 80, urlPath);
+        }
+        // ── DHCP SERVER ──────────────────────────────────────────────────
+        // Format: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]
+        else if (args.size() >= 2 && args[1] == "dhcp_server")
+        {
+            if (!host)
+            {
+                err("dhcp_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start")
+            {
+                if (g_dhcpServers.count(host->getName()))
+                {
+                    info(host->getName() + " sudah ada DHCP server.");
+                }
+                else
+                {
+                    string poolStart = (args.size() >= 4) ? args[3] : "192.168.1.100";
+                    string poolEnd = (args.size() >= 5) ? args[4] : "192.168.1.200";
+                    string gateway = (args.size() >= 6) ? args[5] : host->getIpAddress();
+                    uint8_t prefix = (args.size() >= 7) ? stoi(args[6]) : 24;
+                    DHCPServer *srv = new DHCPServer(host, poolStart, poolEnd, gateway, prefix);
+                    srv->start();
+                    g_dhcpServers[host->getName()] = srv;
+                    ok("DHCP server berjalan di " + host->getName());
+                }
+            }
+            else if (args.size() >= 3 && args[2] == "stop")
+            {
+                if (g_dhcpServers.count(host->getName()))
+                {
+                    delete g_dhcpServers[host->getName()];
+                    g_dhcpServers.erase(host->getName());
+                    ok("DHCP server di " + host->getName() + " dihentikan.");
+                }
+                else
+                {
+                    err("Tidak ada DHCP server di " + host->getName());
+                }
+            }
+            else
+            {
+                err("Penggunaan: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]");
+            }
+        }
+
+        else if (args.size() >= 2 && args[1] == "dhcp_discover")
+        {
+            if (!host)
+            {
+                err("dhcp_discover hanya untuk host.");
+                return true;
+            }
+            DHCPClient dhcp(host);
+            bool result = dhcp.discover();
+            if (result)
+            {
+                ok("DHCP selesai. IP baru: " + host->getIpAddress() +
+                   "  GW: " + host->getDefaultGateway());
+            }
+            else
+            {
+                err("DHCP discover gagal — tidak ada response dari server.");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "acl")
+        {
+            if (!router)
+            {
+                err(args[0] + " bukan router.");
+                return true;
+            }
+            if (args[2] == "show")
+            {
+                router->printACL();
+            }
+            else if (args[2] == "remove" && args.size() >= 4)
+            {
+                try
+                {
+                    router->removeACLRule(stoi(args[3]));
+                    ok("ACL rule " + args[3] + " dihapus.");
+                }
+                catch (const exception &e)
+                {
+                    err(string("Gagal hapus rule: ") + e.what());
+                }
+            }
+            else if (args[2] == "add" && args.size() >= 9)
+            {
+                ACLRule rule;
+                rule.action = (args[3] == "deny") ? ACLRule::Action::DENY : ACLRule::Action::PERMIT;
+                rule.direction = (args[4] == "out") ? ACLRule::Direction::OUT : ACLRule::Direction::IN;
+                rule.port = stoi(args[5]);
+                rule.srcNet = args[6];
+                rule.dstNet = args[7];
+                string proto = args[8];
+                rule.protocol = (proto == "tcp") ? 6 : (proto == "udp") ? 17
+                                                   : (proto == "icmp")  ? 1
+                                                                        : 0;
+                rule.srcPort = (args.size() > 9) ? stoi(args[9]) : -1;
+                rule.dstPort = (args.size() > 10) ? stoi(args[10]) : -1;
+                router->addACLRule(rule);
+                ok("ACL rule ditambahkan: " + rule.toString());
+            }
+            else
+            {
+                err("Penggunaan:");
+                err("  <router> acl show");
+                err("  <router> acl add <permit|deny> <in|out> <port|-1> <srcNet> <dstNet> <proto> [sport] [dport]");
+                err("  <router> acl remove <index>");
+            }
         }
         else
         {
@@ -323,6 +673,22 @@ bool CLI::processCommand(const string &line)
             handleLoad(args);
         else if (cmd == "topology")
             handleTopology(args);
+        else if (cmd == "visualize")
+        {
+            // Bonus: Topology Visualizer
+            if (args.size() >= 2 && args[1] == "dot")
+            {
+                string filename = (args.size() >= 3) ? args[2] : "topology.dot";
+                if (TopologyVisualizer::exportDot(sim, filename))
+                    ok("DOT file berhasil diekspor ke: " + filename);
+                else
+                    err("Gagal ekspor DOT file.");
+            }
+            else
+            {
+                TopologyVisualizer::printAscii(sim);
+            }
+        }
         else if (cmd == "help")
             handleHelp(args);
         else

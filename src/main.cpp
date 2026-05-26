@@ -10,8 +10,7 @@ int main(int argc, char* argv[]) {
     if (argc >= 2) {
         std::string filepath = argv[1];
         std::cout << "[..] Memuat topologi awal: " << filepath << "\n";
-        if (!sim.loadTopology(filepath))
-            std::cerr << "[ERR] Gagal memuat '" << filepath << "'. Lanjut tanpa topologi.\n\n";
+        sim.loadTopology(filepath);
     }
 
     cli.run();

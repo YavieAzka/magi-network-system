@@ -70,12 +70,14 @@ void testRouter() {
     auto noRoute = r_icmp.longestPrefixMatch(fiktifIP);
     assert(noRoute == nullptr && "Router tidak boleh punya rute ke IP fiktif!");
     
-    bool pingUnreachable = h1.ping(fiktifIP, 1);
-    assert(pingUnreachable == true && "Ping harus gagal karena mendapat ICMP Unreachable");
+    bool gotUnreachable = h1.ping(fiktifIP, 1);
+    // ping() returns true only for ECHO_REPLY; for Unreachable it returns false
+    // but Host still processes the ICMP Unreachable (printed above)
+    assert(gotUnreachable == false && "Ping to unreachable IP should return false (no ECHO_REPLY)");
     cout << "[OK] Test ICMP Error: Destination Unreachable berhasil.\n";
     bool gatewayKnown = h1.getArpCache().hasIp(h1.getDefaultGateway());
-    assert(gatewayKnown && "H1 harus menerima balasan ICMP Time Exceeded dari Router!");
-    cout << "[OK] Test ICMP Error: Time Exceeded berhasil.\n";
+    assert(gatewayKnown && "H1 harus menerima balasan ARP dari Router!");
+    cout << "[OK] Test ICMP Error: ARP cache terisi setelah ping unreachable.\n";
 
     cout << "[OK] Semua pengujian testRouter (LPM & ICMP Error) LULUS.\n\n";
 }

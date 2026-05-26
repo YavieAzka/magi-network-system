@@ -1,192 +1,247 @@
 #include "../../include/layer2/Switch.hpp"
-Switch::Switch(const string& name, int _numPorts): Node(name), numPorts(_numPorts){
-    for(int i = 1; i <= numPorts; i++){
+#include "../../include/util/Exceptions.hpp"
+
+Switch::Switch(const std::string &name, int _numPorts)
+    : Node(name), numPorts(_numPorts)
+{
+    for (int i = 1; i <= numPorts; i++)
+    {
         portConfigs[i] = PortConfig();
     }
-    cout << "[" << name << "] Swicth dibuat dengan " << numPorts << " numPorts\n";
+    std::cout << "[" << name << "] Switch dibuat dengan " << numPorts << " port\n";
 }
 
-void Switch::configurePort(int port, PortType type, uint16_t pvid, vector<int> allowedVlans){
-    if (!isValidPort(port)) {
-        cerr << "[" << getName() << "] ERROR: Port " << port << " tidak valid.\n";
-        return;
+void Switch::configurePort(int port, PortType type, uint16_t pvid, std::vector<int> allowedVlans)
+{
+    if (!isValidPort(port))
+    {
+        throw NetworkException(getName() + " error: invalid port " + std::to_string(port));
     }
 
     portConfigs[port] = PortConfig(type, pvid, allowedVlans);
-        cout << "[" << getName() << "] Port " << port
+    std::cout << "[" << getName() << "] Port " << port
               << " -> " << (type == ACCESS ? "ACCESS" : "TRUNK")
               << " PVID=" << pvid;
- 
-    if (!allowedVlans.empty()) {
-        cout << " allowed=[";
-        for (size_t i = 0; i < allowedVlans.size(); ++i) {
-            cout << allowedVlans[i];
-            if (i + 1 < allowedVlans.size()) cout << ",";
+
+    if (!allowedVlans.empty())
+    {
+        std::cout << " allowed=[";
+        for (size_t i = 0; i < allowedVlans.size(); ++i)
+        {
+            std::cout << allowedVlans[i];
+            if (i + 1 < allowedVlans.size())
+                std::cout << ",";
         }
-        cout << "]";
+        std::cout << "]";
     }
-    cout << "\n";
+    std::cout << "\n";
 }
-static string normalizeMac(const string& mac){
-    string result = mac;
-    transform(result.begin(), result.end(), result.begin(), ::tolower);
+
+std::string Switch::normalizeMac(const std::string &mac)
+{
+    std::string result = mac;
+    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
     return result;
 }
-void Switch::learnMAC(uint16_t vlanId, const string& mac, int port){
-    string normalizedMac = normalizeMac(mac);
 
-    auto key = make_pair(normalizedMac, vlanId);
+void Switch::learnMAC(uint16_t vlanId, const std::string &mac, int port)
+{
+    std::string normalizedMac = normalizeMac(mac);
+
+    auto key = std::make_pair(normalizedMac, vlanId);
     auto it = macTable.find(key);
-    if (it == macTable.end()){
-        cout << "[" << getName() << "] MAC Learn  : "
-                    << mac << " VLAN " << vlanId << " -> Port " << port << "\n";
-        } else if (it->second.port != port) {
-            cout << "[" << getName() << "] MAC Update : "
-                    << mac << " VLAN " << vlanId
-                    << " Port " << it->second.port << " -> " << port << "\n";
-        }  
-        macTable[key] = MACEntry{ port, chrono::steady_clock::now() 
-    };
-}
-int Switch::lookupMAC(uint16_t vlanId, const string& mac){
-    string normalizedMac = normalizeMac(mac);
-    auto key = make_pair(normalizedMac, vlanId);
-    auto it = macTable.find(key);
-    if (it == macTable.end()) return -1;
-    else {
-        return it->second.port;
+    if (it == macTable.end())
+    {
+        std::cout << "[" << getName() << "] MAC Learn  : "
+                  << mac << " VLAN " << vlanId << " -> Port " << port << "\n";
     }
+    else if (it->second.port != port)
+    {
+        std::cout << "[" << getName() << "] MAC Update : "
+                  << mac << " VLAN " << vlanId
+                  << " Port " << it->second.port << " -> " << port << "\n";
+    }
+    macTable[key] = MACEntry{port, std::chrono::steady_clock::now()};
 }
-void Switch::printMACTable() const {
-    cout << "\n[" << getName() << "] MAC Address Table:\n";
-    cout << string(46, '-') << "\n";
-    cout << left
-              << setw(7)  << "VLAN"
-              << setw(22) << "MAC Address"
-              << setw(6)  << "Port" << "\n";
-    cout << string(46, '-') << "\n";
- 
-    if (macTable.empty()) {
-        cout << "(tabel kosong)\n";
-    } else {
-        for (const auto& entry : macTable) {
-            const string& mac = entry.first.first;
+
+int Switch::lookupMAC(uint16_t vlanId, const std::string &mac)
+{
+    std::string normalizedMac = normalizeMac(mac);
+    auto key = std::make_pair(normalizedMac, vlanId);
+    auto it = macTable.find(key);
+    if (it == macTable.end())
+        return -1;
+    return it->second.port;
+}
+
+void Switch::printMACTable() const
+{
+    std::cout << "\n[" << getName() << "] MAC Address Table:\n";
+    std::cout << std::string(46, '-') << "\n";
+    std::cout << std::left
+              << std::setw(7) << "VLAN"
+              << std::setw(22) << "MAC Address"
+              << std::setw(6) << "Port"
+              << "\n";
+    std::cout << std::string(46, '-') << "\n";
+
+    if (macTable.empty())
+    {
+        std::cout << "(tabel kosong)\n";
+    }
+    else
+    {
+        for (const auto &entry : macTable)
+        {
+            const std::string &mac = entry.first.first;
             uint16_t vlan = entry.first.second;
             int port = entry.second.port;
-            cout << left
-                      << setw(7)  << vlan
-                      << setw(22) << mac
-                      << setw(6)  << port << "\n";
+            std::cout << std::left
+                      << std::setw(7) << vlan
+                      << std::setw(22) << mac
+                      << std::setw(6) << port
+                      << "\n";
         }
     }
-    cout << string(46, '-') << "\n\n";
+    std::cout << std::string(46, '-') << "\n\n";
 }
- 
-void Switch::handleReceive(int ingressPort, const vector<uint8_t>& rawBytes){
-    if(!isValidPort(ingressPort)){
-        cerr << "[" << getName() << "] ERROR: Frame masuk di port tidak valid: " << ingressPort << "\n";
-        return; 
+
+void Switch::handleReceive(Interface *inInterface, const std::vector<uint8_t> &rawBytes)
+{
+    int ingressPort = inInterface->getPortNumber();
+
+    if (!isValidPort(ingressPort))
+    {
+        throw NetworkException(getName() + " error: incoming frame on invalid port " + std::to_string(ingressPort));
     }
 
     EthernetFrame frame;
-    try{
+    try
+    {
         frame.deserialize(rawBytes);
     }
-    catch (const exception& e){
-        cerr << "[" << getName() << "] ERROR: Gagal parse frame: "
-                  << e.what() << "\n";
-        return;
+    catch (const std::exception &e)
+    {
+        throw ParseException(getName() + " error: failed to parse frame: " + e.what());
     }
 
-    const PortConfig& cfg = portConfigs.at(ingressPort);
+    const PortConfig &cfg = portConfigs.at(ingressPort);
     uint16_t ingressVlan;
-    if (cfg.type == ACCESS){
+    if (cfg.type == ACCESS)
+    {
         ingressVlan = cfg.pvid;
-
-        if (frame.vlanId != -1){
-            // frame bertag masuk di access port, warning!
-            cout << "[" << getName() << "] WARN: Tagged frame (VLAN " << frame.vlanId << ") di ACCESS port " << ingressPort << ", diabaikan, pakai PVID " << cfg.pvid << "\n";
+        if (frame.vlanId != -1)
+        {
+            std::cout << "[" << getName() << "] WARN: Tagged frame (VLAN " << frame.vlanId
+                      << ") di ACCESS port " << ingressPort << ", diabaikan, pakai PVID " << cfg.pvid << "\n";
         }
     }
-    else{
-        if (frame.vlanId != -1){
-            ingressVlan = (uint16_t)frame.vlanId;
+    else
+    {
+        if (frame.vlanId != -1)
+        {
+            ingressVlan = static_cast<uint16_t>(frame.vlanId);
         }
-        else{
+        else
+        {
             ingressVlan = cfg.pvid;
-            cout << "[" << getName() << "] Untagged frame di TRUNK port " << ingressPort << ", pakai native VLAN " << ingressVlan << "\n";
+            std::cout << "[" << getName() << "] Untagged frame di TRUNK port " << ingressPort
+                      << ", pakai native VLAN " << ingressVlan << "\n";
         }
     }
-    cout << "[" << getName() << "] Frame masuk Port " << ingressPort << " VLAN " << ingressVlan << " | " << frame.srcMac << " -> " << frame.destMac << "\n";
+    std::cout << "[" << getName() << "] Frame masuk Port " << ingressPort
+              << " VLAN " << ingressVlan << " | " << frame.srcMac << " -> " << frame.destMac << "\n";
 
-    if (normalizeMac(frame.srcMac) != "ff:ff:ff:ff:ff:ff") {
+    if (normalizeMac(frame.srcMac) != "ff:ff:ff:ff:ff:ff")
+    {
         learnMAC(ingressVlan, frame.srcMac, ingressPort);
     }
 
-    if (normalizeMac(frame.destMac) == "ff:ff:ff:ff:ff:ff") {
+    if (normalizeMac(frame.destMac) == "ff:ff:ff:ff:ff:ff")
+    {
         flood(ingressVlan, frame, ingressPort);
- 
-    } else {
+    }
+    else
+    {
         int targetPort = lookupMAC(ingressVlan, frame.destMac);
- 
-        if (targetPort != -1) {
-            cout << "[" << getName() << "] MAC " << frame.destMac << " dikenal -> Forward ke Port " << targetPort << "\n";
+        if (targetPort != -1)
+        {
+            std::cout << "[" << getName() << "] MAC " << frame.destMac << " dikenal -> Forward ke Port " << targetPort << "\n";
             forwardFrame(targetPort, frame, ingressVlan);
-        } else {
-            // MAC tidak dikenal -> unknown unicast -> flood
-            cout << "[" << getName() << "] MAC " << frame.destMac << " tidak dikenal -> Flooding\n";
+        }
+        else
+        {
+            std::cout << "[" << getName() << "] MAC " << frame.destMac << " tidak dikenal -> Flooding\n";
             flood(ingressVlan, frame, ingressPort);
         }
     }
 }
 
-string Switch::getType() const{
+std::string Switch::getType() const
+{
     return "switch";
 }
 
-void Switch::forwardFrame(int port, EthernetFrame& frame, uint16_t ingressVlan){
-    if (!isValidPort(port)) return;
-    if (!isVlanAllowed(port, ingressVlan)) return;
+void Switch::forwardFrame(int port, EthernetFrame &frame, uint16_t ingressVlan)
+{
+    if (!isValidPort(port))
+        return;
+    if (!isVlanAllowed(port, ingressVlan))
+        return;
 
-    const PortConfig& cfg = portConfigs.at(port);
-    if (cfg.type == ACCESS){
+    const PortConfig &cfg = portConfigs.at(port);
+    if (cfg.type == ACCESS)
+    {
         frame.vlanId = -1;
     }
-    else{
-        frame.vlanId = (int)ingressVlan;
+    else
+    {
+        frame.vlanId = static_cast<int>(ingressVlan);
     }
 
-    vector<uint8_t> rawBytes = frame.toBytes();
-    Interface* iface = getInterface(port);
-    if (iface && iface->isConnected()) {
-        cout   << "[" << getName() << "] Forward -> Port " << port << " (" << (cfg.type == ACCESS ? "ACCESS" : "TRUNK") << " VLAN " << ingressVlan << ")\n";
+    std::vector<uint8_t> rawBytes = frame.toBytes();
+    Interface *iface = getInterface(port);
+    if (iface && iface->isConnected())
+    {
+        std::cout << "[" << getName() << "] Forward -> Port " << port
+                  << " (" << (cfg.type == ACCESS ? "ACCESS" : "TRUNK")
+                  << " VLAN " << ingressVlan << ")\n";
         iface->send(rawBytes);
     }
-        
 }
-void Switch::flood(uint16_t ingressVlan, EthernetFrame& frame, int excludePort){
-    cout << "[" << getName() << "] Flooding VLAN " << ingressVlan << " dari Port " << excludePort << "\n";
- 
-    for (int p = 1; p <= numPorts; ++p) {
-        if (p == excludePort) continue;
+
+void Switch::flood(uint16_t ingressVlan, EthernetFrame &frame, int excludePort)
+{
+    std::cout << "[" << getName() << "] Flooding VLAN " << ingressVlan
+              << " dari Port " << excludePort << "\n";
+
+    for (int p = 1; p <= numPorts; ++p)
+    {
+        if (p == excludePort)
+            continue;
         forwardFrame(p, frame, ingressVlan);
     }
 }
-bool Switch::isVlanAllowed(int port, uint16_t vlanId) const{
-    auto it = portConfigs.find(port);
-    if (it == portConfigs.end()) return false;
 
-    const PortConfig& cfg = it->second;
-    // Kalau access port, cuman frame dengan vlan = pvidnya;
-    if (cfg.type == ACCESS){
+bool Switch::isVlanAllowed(int port, uint16_t vlanId) const
+{
+    auto it = portConfigs.find(port);
+    if (it == portConfigs.end())
+        return false;
+
+    const PortConfig &cfg = it->second;
+    if (cfg.type == ACCESS)
+    {
         return cfg.pvid == vlanId;
     }
 
-    // trunk port, kalau empty boleh semua
-    if (cfg.allowedVlans.empty()) return true;
+    if (cfg.allowedVlans.empty())
+        return true;
 
-    return find(cfg.allowedVlans.begin(), cfg.allowedVlans.end(), vlanId) != cfg.allowedVlans.end();
+    return std::find(cfg.allowedVlans.begin(), cfg.allowedVlans.end(), vlanId) != cfg.allowedVlans.end();
 }
-bool Switch::isValidPort(int port) const{
+
+bool Switch::isValidPort(int port) const
+{
     return (port >= 1 && port <= numPorts);
 }

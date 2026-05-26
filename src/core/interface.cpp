@@ -126,15 +126,14 @@ void Interface::send(const vector<uint8_t> &rawBytes)
         return;
     }
 
-    if (rawBytes.size() > static_cast<size_t>(mtu))
+if (rawBytes.size() > static_cast<size_t>(mtu + 18))
     {
         cout << "[" << owner->getName() << ":" << portNumber
-             << "] send failed: packet size "
+             << "] send failed: frame size "
              << rawBytes.size()
-             << " exceeds MTU "
-             << mtu
-             << "."
-             << endl;
+             << " exceeds MTU+overhead "
+             << (mtu + 18)
+             << "." << endl;
         return;
     }
 
