@@ -69,6 +69,13 @@ void test_tcp_full_pipeline(Host* h1, Host* h2) {
 
     this_thread::sleep_for(chrono::milliseconds(1500));
 
+    int waitCount = 0;
+    while ((h1Socket->state != TCPState::CLOSED || h2Socket->state != TCPState::CLOSED) && waitCount < 20)
+    {
+        this_thread::sleep_for(chrono::milliseconds(100));
+        waitCount++;
+    }
+
     assert(h1Socket->state == TCPState::CLOSED && "GAGAL: State H1 belum CLOSED!");
     assert(h2Socket->state == TCPState::CLOSED && "GAGAL: State H2 belum CLOSED!");
 

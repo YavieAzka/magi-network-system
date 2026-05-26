@@ -24,6 +24,7 @@ target_link_libraries(layer2 PRIVATE core util)
 add_library(layer3
     src/layer3/IPv4Packet.cpp
     src/layer3/ICMPMessage.cpp
+    src/layer3/FragmentReassembler.cpp
 )
 target_include_directories(layer3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(layer3 PRIVATE util)
@@ -44,7 +45,7 @@ add_library(core
     src/core/Router.cpp
 )
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(core PUBLIC middleboxes util)
+target_link_libraries(core PUBLIC middleboxes layer3 util)
 
 add_library(layer4
     src/layer4/UDPSegment.cpp
@@ -76,6 +77,11 @@ add_executable(test_layer3
     tests/test_layer3.cpp
 )
 target_link_libraries(test_layer3 PRIVATE core layer2 layer3 layer4 layer7 util)
+
+add_executable(test_fragmentation
+    tests/test_fragmentation.cpp
+)
+target_link_libraries(test_fragmentation PRIVATE core layer2 layer3 layer4 layer7 util)
 
 add_executable(test_layer4
     tests/test_layer4.cpp
