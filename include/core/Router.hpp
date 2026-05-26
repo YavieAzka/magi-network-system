@@ -2,10 +2,12 @@
 #include "core/Node.hpp"
 #include "layer2/ARP.hpp"
 #include "middleboxes/ACL.hpp"
+#include "middleboxes/NAT.hpp"
 
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <memory>
 
 struct RoutingTableEntry
 {
@@ -37,6 +39,11 @@ public:
 
     std::string getInterfaceIp(int port) const;
 
+    void enableNAT(const std::string& publicIp,
+                   int privatePort, int publicPort);
+    void printNATTable() const;
+    bool hasNAT() const { return nat_ != nullptr; }
+
     void addACLRule(const ACLRule &rule);
     void removeACLRule(int index);
     void printACL() const;
@@ -48,6 +55,10 @@ private:
 
     std::map<int, std::string> ifaceIp_;
     std::map<int, uint8_t> ifacePrefix_;
+
+    std::unique_ptr<NAT> nat_;
+    int natPrivatePort_ = -1;  // port interface sisi private
+    int natPublicPort_  = -1;  // port interface sisi public
 
     ACLList acl_;
 

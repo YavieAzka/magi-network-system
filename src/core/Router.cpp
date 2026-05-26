@@ -6,6 +6,9 @@
 #include "layer3/IPv4Packet.hpp"
 #include "layer3/ICMPMessage.hpp"
 #include "util/NetUtils.hpp"
+#include "middleboxes/NAT.hpp"
+#include "layer4/TCPSegment.hpp"
+#include "layer4/UDPSegment.hpp"
 
 #include <iostream>
 #include <iomanip>
@@ -253,6 +256,53 @@ void Router::routePacket(Interface *inInterface, const vector<uint8_t> &ipBytes)
               << " TTL=" << (int)pkt.ttl
               << " proto=" << (int)pkt.protocol << std::endl;
 
+    // === NAT INBOUND ===
+    if (nat_) {
+        int inPort = inInterface->getPortNumber();
+        if (inPort == natPublicPort_) {
+            if (pkt.protocol == 6) {
+                TCPSegment seg = TCPSegment::deserialize(pkt.payload);
+                std::string privateIp; uint16_t privatePort;
+                if (!nat_->translateInbound(seg.dstPort, privateIp, privatePort)) {
+                    std::cout << "[NAT] Inbound: tidak ada mapping untuk port "
+                              << seg.dstPort << ", drop.\n";
+                    return;
+                }
+                seg.dstPort = privatePort;
+                pkt.dstIP   = privateIp;
+                seg.calculateChecksum(pkt.srcIP, pkt.dstIP);
+                pkt.payload = seg.toBytes();
+            } else if (pkt.protocol == 17) {
+                UDPSegment seg = UDPSegment::deserialize(pkt.payload);
+                std::string privateIp; uint16_t privatePort;
+                if (!nat_->translateInbound(seg.dstPort, privateIp, privatePort)) {
+                    std::cout << "[NAT] Inbound: tidak ada mapping untuk port "
+                              << seg.dstPort << ", drop.\n";
+                    return;
+                }
+                seg.dstPort  = privatePort;
+                pkt.dstIP    = privateIp;
+                seg.checksum = UDPSegment::calculateChecksum(pkt.srcIP, pkt.dstIP, seg);
+                pkt.payload  = seg.toBytes();
+            } else if (pkt.protocol == 1) {
+                ICMPMessage icmp;
+                icmp.deserialize(pkt.payload);
+                uint16_t identifier = icmp.getIdentifier();
+                std::string privateIp; uint16_t privatePort;
+                if (!nat_->translateInboundICMP(identifier, privateIp, privatePort)) {
+                    std::cout << "[NAT] Inbound ICMP: tidak ada mapping untuk id "
+                              << identifier << ", drop.\n";
+                    return;
+                }
+                pkt.dstIP = privateIp;
+            }
+            pkt.checksum = 0;
+            pkt.checksum = pkt.calculateChecksum();
+            std::cout << "[NAT] Inbound: → " << pkt.dstIP << "\n";
+        }
+    }
+    // === END NAT INBOUND ===
+
     // Cek apakah paket ditujukan ke salah satu IP interface router ini
     for (const auto &[port, ip] : ifaceIp_)
     {
@@ -326,6 +376,45 @@ void Router::routePacket(Interface *inInterface, const vector<uint8_t> &ipBytes)
             return;
         }
     }
+
+    // === NAT OUTBOUND ===
+    if (nat_) {
+        int inPort = inInterface->getPortNumber();
+        if (inPort == natPrivatePort_) {
+            std::string originalSrcIp = pkt.srcIP;
+
+            if (pkt.protocol == 6) {
+                TCPSegment seg = TCPSegment::deserialize(pkt.payload);
+                uint16_t mappedPort = nat_->translateOutbound(pkt.srcIP, seg.srcPort);
+                if (mappedPort == 0) return;
+                seg.srcPort = mappedPort;
+                pkt.srcIP   = nat_->getPublicIp();
+                seg.calculateChecksum(pkt.srcIP, pkt.dstIP);
+                pkt.payload = seg.toBytes();
+            } else if (pkt.protocol == 17) {
+                UDPSegment seg = UDPSegment::deserialize(pkt.payload);
+                uint16_t mappedPort = nat_->translateOutbound(pkt.srcIP, seg.srcPort);
+                if (mappedPort == 0) return;
+                seg.srcPort  = mappedPort;
+                pkt.srcIP    = nat_->getPublicIp();
+                seg.checksum = UDPSegment::calculateChecksum(pkt.srcIP, pkt.dstIP, seg);
+                pkt.payload  = seg.toBytes();
+            } else if (pkt.protocol == 1) {
+                ICMPMessage icmp;
+                icmp.deserialize(pkt.payload);
+                uint16_t identifier = icmp.getIdentifier();
+                uint16_t mappedPort = nat_->translateOutbound(pkt.srcIP, identifier);
+                if (mappedPort == 0) return;
+                pkt.srcIP = nat_->getPublicIp();
+            }
+
+            pkt.checksum = 0;
+            pkt.checksum = pkt.calculateChecksum();
+            std::cout << "[NAT] Outbound: " << originalSrcIp
+                      << " → " << pkt.srcIP << "\n";
+        }
+    }
+    // === END NAT OUTBOUND ===
 
     forwardIpPacket(route->outPort, nextHopIp, pkt.toBytes(), pkt.srcIP);
 }
@@ -554,4 +643,23 @@ void Router::printACL() const
     cout << "\n[" << getName() << "] ACL Rules:\n";
     acl_.printRules();
     cout << "\n";
+}
+
+void Router::enableNAT(const std::string& publicIp,
+                       int privatePort, int publicPort) {
+    nat_ = std::make_unique<NAT>(publicIp);
+    natPrivatePort_ = privatePort;
+    natPublicPort_  = publicPort;
+    std::cout << "[" << getName() << "] NAT enabled: "
+              << "private=port" << privatePort
+              << " public=port" << publicPort
+              << " (" << publicIp << ")\n";
+}
+
+void Router::printNATTable() const {
+    if (!nat_) {
+        std::cout << "[" << getName() << "] NAT tidak aktif.\n";
+        return;
+    }
+    nat_->printTable();
 }

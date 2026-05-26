@@ -185,32 +185,33 @@ void CLI::handleTopology(const vector<string> &)
 void CLI::handleHelp(const vector<string> &)
 {
     cout << "\nDaftar Perintah:\n"
-            "  create   <host|switch|router> <nama>        Buat node baru\n"
-            "  link     <ep1> <ep2> [delay_ms]             Sambungkan dua node\n"
-            "  unlink   <ep1> <ep2>                        Putuskan kabel\n"
-            "  topology                                    Tampilkan state di memori\n"
-            "  save     [file.json]                        Ekspor ke JSON\n"
-            "  load     <file.json>                        Impor dari JSON\n"
-            "  help                                        Daftar perintah ini\n"
-            "  exit / quit                                 Keluar\n"
-            "  <host>   set-ip <IP/CIDR>                   Set IP host\n"
-            "  <host>   set-gw <IP>                        Set gateway host\n"
-            "  <host>   ping <IP> [count]                  Kirim ICMP ping\n"
-            "  <host>   traceroute <IP>                    Lacak rute hop L3\n"
-            "  <host>   arp                                Tampilkan ARP cache host\n"
-            "  <host>   udp_send <dIP> <dPort> <sPort> <m> Kirim datagram UDP\n"
-            "  <host>   tcp_listen <port>                  Buka port TCP LISTEN\n"
-            "  <host>   tcp_connect <IP> <port>            Inisiasi TCP Handshake\n"
-            "  <host>   tcp_send <port> <msg>              Kirim data TCP PSH|ACK\n"
-            "  <host>   tcp_close <port>                   Initiate TCP teardown\n"
-            "  <host>   http_server <port> [webroot]         Start HTTP server on port\n"
-            "  <host>   http_get <IP> <port> <path>         Send HTTP GET request\n"
-            "  <router> set-ip <port> <IP/CIDR>            Set IP port router\n"
-            "  <router> ip route <net> <hop> <port>        Tambah static route\n"
-            "  <router> route                              Tampilkan routing table\n"
-            "  <router> arp                                Tampilkan ARP cache router\n"
-            "  <switch> mac / mactable                     Tampilkan MAC table\n"
-            "  <node>   mtu <port> <value>                 Set MTU interface (68-9000)\n"
+            "  create   <host|switch|router> <nama>             Buat node baru\n"
+            "  link     <ep1> <ep2> [delay_ms]                  Sambungkan dua node\n"
+            "  unlink   <ep1> <ep2>                             Putuskan kabel\n"
+            "  topology                                         Tampilkan state di memori\n"
+            "  save     [file.json]                             Ekspor ke JSON\n"
+            "  load     <file.json>                             Impor dari JSON\n"
+            "  help                                             Daftar perintah ini\n"
+            "  exit / quit                                      Keluar\n"
+            "  <host>   set-ip <IP/CIDR>                        Set IP host\n"
+            "  <host>   set-gw <IP>                             Set gateway host\n"
+            "  <host>   ping <IP> [count]                       Kirim ICMP ping\n"
+            "  <host>   traceroute <IP>                         Lacak rute hop L3\n"
+            "  <host>   arp                                     Tampilkan ARP cache host\n"
+            "  <host>   udp_send <dIP> <dPort> <sPort> <m>      Kirim datagram UDP\n"
+            "  <host>   tcp_listen <port>                       Buka port TCP LISTEN\n"
+            "  <host>   tcp_connect <IP> <port>                 Inisiasi TCP Handshake\n"
+            "  <host>   tcp_send <port> <msg>                   Kirim data TCP PSH|ACK\n"
+            "  <host>   tcp_close <port>                        Initiate TCP teardown\n"
+            "  <host>   http_server <port> [webroot]            Start HTTP server on port\n"
+            "  <host>   http_get <IP> <port> <path>             Send HTTP GET request\n"
+            "  <router> set-ip <port> <IP/CIDR>                 Set IP port router\n"
+            "  <router> ip route <net> <hop> <port>             Tambah static route\n"
+            "  <router> route                                   Tampilkan routing table\n"
+            "  <router> arp                                     Tampilkan ARP cache router\n"
+            "  <router> nat enable <pubIP> <privPort> <pubPort> Aktifkan NAT/PAT\n"
+            "  <router> nat table                               Tampilkan NAT translation table\n"
+            "  <switch> mac / mactable                          Tampilkan MAC table\n"
             "\nFormat endpoint: NamaNode  atau  NamaNode:NomorPort\n"
             "  Contoh: link H1 SW1:3 10\n\n";
 }
@@ -495,6 +496,7 @@ bool CLI::processCommand(const string &line)
                     err("Tidak ada HTTP server yang berjalan di " + host->getName());
                 }
             }
+            
             else
             {
                 err("Penggunaan: <host> http_server start [file] | stop");
@@ -643,6 +645,28 @@ bool CLI::processCommand(const string &line)
                 err("  <router> acl remove <index>");
             }
         }
+        else if (args.size() >= 6 && args[1] == "nat" && args[2] == "enable")
+            {
+                // Format: R1 nat enable <publicIp> <privatePort> <publicPort>
+                // Contoh: R1 nat enable 203.0.113.1 1 2
+                if (!router) {
+                    err("Hanya router yang bisa enable NAT.");
+                } else {
+                    std::string publicIp = args[3];
+                    int privatePort = stoi(args[4]);
+                    int publicPort  = stoi(args[5]);
+                    router->enableNAT(publicIp, privatePort, publicPort);
+                    ok("NAT aktif di " + router->getName());
+                }
+            }
+            else if (args.size() >= 3 && args[1] == "nat" && args[2] == "table")
+            {
+                if (!router) {
+                    err("Hanya router yang bisa tampilkan NAT table.");
+                } else {
+                    router->printNATTable();
+                }
+            }
         else
         {
             err("Perintah tidak dikenal untuk node: " + args[1]);
