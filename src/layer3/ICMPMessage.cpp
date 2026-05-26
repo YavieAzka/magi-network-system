@@ -185,3 +185,20 @@ ICMPMessage ICMPMessage::buildUnreachable(const std::vector<uint8_t> &originalHe
 
     return ICMPMessage(ICMP::TYPE_UNREACHABLE, code, std::move(pl));
 }
+
+ICMPMessage ICMPMessage::buildFragmentationNeeded(uint16_t nextHopMTU,
+                                                   const std::vector<uint8_t> &originalHeader)
+{
+    std::vector<uint8_t> pl;
+    pl.reserve(4 + originalHeader.size());
+
+    pl.push_back(0x00);
+    pl.push_back(0x00);
+    uint16_t mtuVal = nextHopMTU;
+    pl.push_back(static_cast<uint8_t>((mtuVal >> 8) & 0xFF));
+    pl.push_back(static_cast<uint8_t>(mtuVal & 0xFF));
+
+    pl.insert(pl.end(), originalHeader.begin(), originalHeader.end());
+
+    return ICMPMessage(ICMP::TYPE_UNREACHABLE, ICMP::CODE_FRAG_NEEDED, std::move(pl));
+}

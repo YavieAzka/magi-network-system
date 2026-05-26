@@ -41,10 +41,24 @@ public:
     // TTL
     void decrementTTL();
 
+    // fragmentation helpers
+    bool isFragment() const;
+    bool isMoreFragments() const;
+    bool isDontFragment() const;
+    uint16_t getFragmentOffset() const;
+
+    // fragment this packet for a given path MTU; returns empty if DF set
+    std::vector<IPv4Packet> fragment(uint16_t pathMTU) const;
+
     // utils
     static constexpr std::uint8_t PROTOCOL_ICMP = 1;
     static constexpr std::uint8_t PROTOCOL_TCP  = 6;
     static constexpr std::uint8_t PROTOCOL_UDP  = 17;
+
+    // IP flags
+    static constexpr uint16_t FLAG_DF = 0x4000;
+    static constexpr uint16_t FLAG_MF = 0x2000;
+    static constexpr uint16_t FRAGMENT_OFFSET_MASK = 0x1FFF;
 };
 
 #endif
