@@ -1,34 +1,85 @@
 {
   "hosts": [
-    {
-      "name": "H1",
-      "ip_address": "0.0.0.0/0",
-      "default_gateway": "0.0.0.0"
-    },
-    {
-      "name": "H2",
-      "ip_address": "0.0.0.0/0",
-      "default_gateway": "0.0.0.0"
-    },
-    {
-      "name": "H3",
-      "ip_address": "0.0.0.0/0",
-      "default_gateway": "0.0.0.0"
-    }
+    { "name": "H1",           "ip_address": "192.168.1.10/24", "default_gateway": "192.168.1.1" },
+    { "name": "H2",           "ip_address": "192.168.1.20/24", "default_gateway": "192.168.1.1" },
+    { "name": "H3",           "ip_address": "192.168.2.10/24", "default_gateway": "192.168.2.1" },
+    { "name": "H4",           "ip_address": "192.168.3.10/24", "default_gateway": "192.168.3.1" },
+    { "name": "H5",           "ip_address": "0.0.0.0/0",       "default_gateway": "0.0.0.0"     },
+    { "name": "Svr_Services", "ip_address": "10.0.30.2/24",    "default_gateway": "10.0.30.1"   },
+    { "name": "Svr_Magi",     "ip_address": "10.0.31.2/24",    "default_gateway": "10.0.31.1"   }
   ],
   "switches": [
-    {
-      "name": "SW1",
-      "num_ports": 24,
-      "vlans": []
-    }
+    { "name": "S1", "num_ports": 24, "vlans": [] },
+    { "name": "S2", "num_ports": 24, "vlans": [] },
+    { "name": "S3", "num_ports": 24, "vlans": [] },
+    { "name": "S4", "num_ports": 24, "vlans": [] }
   ],
   "routers": [
     {
       "name": "R1",
-      "interfaces": [{ "port": 1, "ip_address": "0.0.0.0/0" }],
-      "routing_table": []
+      "interfaces": [
+        { "port": 1, "ip_address": "192.168.1.1/24" },
+        { "port": 2, "ip_address": "192.168.2.1/24" },
+        { "port": 3, "ip_address": "10.0.12.1/30"   },
+        { "port": 4, "ip_address": "10.0.13.1/30"   }
+      ],
+      "routing_table": [
+        { "destination": "192.168.1.0/24", "next_hop": "",          "interface": 1 },
+        { "destination": "192.168.2.0/24", "next_hop": "",          "interface": 2 },
+        { "destination": "10.0.12.0/30",   "next_hop": "",          "interface": 3 },
+        { "destination": "10.0.13.0/30",   "next_hop": "",          "interface": 4 },
+        { "destination": "192.168.3.0/24", "next_hop": "10.0.12.2", "interface": 3 },
+        { "destination": "10.0.30.0/24",   "next_hop": "10.0.13.2", "interface": 4 },
+        { "destination": "10.0.31.0/24",   "next_hop": "10.0.13.2", "interface": 4 }
+      ]
+    },
+    {
+      "name": "R2",
+      "interfaces": [
+        { "port": 1, "ip_address": "192.168.3.1/24" },
+        { "port": 2, "ip_address": "10.0.12.2/30"   }
+      ],
+      "routing_table": [
+        { "destination": "192.168.3.0/24", "next_hop": "",          "interface": 1 },
+        { "destination": "10.0.12.0/30",   "next_hop": "",          "interface": 2 },
+        { "destination": "192.168.1.0/24", "next_hop": "10.0.12.1", "interface": 2 },
+        { "destination": "192.168.2.0/24", "next_hop": "10.0.12.1", "interface": 2 },
+        { "destination": "10.0.13.0/30",   "next_hop": "10.0.12.1", "interface": 2 },
+        { "destination": "10.0.30.0/24",   "next_hop": "10.0.12.1", "interface": 2 },
+        { "destination": "10.0.31.0/24",   "next_hop": "10.0.12.1", "interface": 2 }
+      ]
+    },
+    {
+      "name": "R3",
+      "interfaces": [
+        { "port": 1, "ip_address": "10.0.13.2/30"   },
+        { "port": 2, "ip_address": "10.0.30.1/24"   },
+        { "port": 3, "ip_address": "10.0.31.1/24"   }
+      ],
+      "routing_table": [
+        { "destination": "10.0.13.0/30",   "next_hop": "",          "interface": 1 },
+        { "destination": "10.0.30.0/24",   "next_hop": "",          "interface": 2 },
+        { "destination": "10.0.31.0/24",   "next_hop": "",          "interface": 3 },
+        { "destination": "192.168.1.0/24", "next_hop": "10.0.13.1", "interface": 1 },
+        { "destination": "192.168.2.0/24", "next_hop": "10.0.13.1", "interface": 1 },
+        { "destination": "192.168.3.0/24", "next_hop": "10.0.13.1", "interface": 1 },
+        { "destination": "10.0.12.0/30",   "next_hop": "10.0.13.1", "interface": 1 }
+      ]
     }
   ],
-  "links": []
+  "links": [
+    { "endpoints": ["H1",          "S1:2"  ], "delay": 0 },
+    { "endpoints": ["H2",          "S1:3"  ], "delay": 0 },
+    { "endpoints": ["S1:1",        "R1:1"  ], "delay": 0 },
+    { "endpoints": ["H3",          "S2:2"  ], "delay": 0 },
+    { "endpoints": ["S2:1",        "R1:2"  ], "delay": 0 },
+    { "endpoints": ["H4",          "S3:2"  ], "delay": 0 },
+    { "endpoints": ["S3:1",        "R2:1"  ], "delay": 0 },
+    { "endpoints": ["R1:3",        "R2:2"  ], "delay": 0 },
+    { "endpoints": ["R1:4",        "R3:1"  ], "delay": 0 },
+    { "endpoints": ["R3:2",        "S4:1"  ], "delay": 0 },
+    { "endpoints": ["Svr_Services","S4:2"  ], "delay": 0 },
+    { "endpoints": ["H5",          "S4:3"  ], "delay": 0 },
+    { "endpoints": ["R3:3",        "Svr_Magi"], "delay": 0 }
+  ]
 }
