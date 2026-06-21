@@ -178,16 +178,19 @@ void Simulator::buildFromConfig()
     for (const auto &h : topology.hosts)
     {
         auto n = make_unique<Host>(h.name, h.ip_address, h.default_gateway);
-        n->addInterface(1, generateMac());
+        // n->addInterface(1, generateMac());
         nodes[h.name] = std::move(n);
     }
     for (const auto &sw : topology.switches)
     {
         auto n = make_unique<Switch>(sw.name);
-        n->addInterface(1, generateMac());
+        // n->addInterface(1, generateMac());
         for (const auto &vl : sw.vlans)
-            if (!n->getInterface(vl.port))
+            if (!n->getInterface(vl.port)){
                 n->addInterface(vl.port, generateMac());
+                Switch::PortType type = (vl.mode == "trunk") ? Switch::TRUNK : Switch::ACCESS; 
+                n->configurePort(vl.port, type, static_cast<uint16_t>(vl.vlan_id));
+            }
         nodes[sw.name] = std::move(n);
     }
     for (const auto &r : topology.routers)

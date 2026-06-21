@@ -10,13 +10,16 @@
 #include "util/TopologyVisualizer.hpp"
 #include "layer7/DHCPClient.hpp"
 #include "layer7/DHCPServer.hpp"
+#include "layer7/DNSServer.hpp"
+#include "layer7/DNSClient.hpp"
+#include "layer7/HTTPClient.hpp"
 #include "core/Interface.hpp"
 #include <map>
 using namespace std;
 
-// Global map: nama host -> DHCPServer yang sedang berjalan
 map<string, DHCPServer *> g_dhcpServers;
-// Note: HTTPClient dan HTTPServer tidak dipakai di cli — pakai host->httpGet() dan host->startHTTPServer()
+map<string, DNSServer *> g_dnsServers;
+map<string, string> g_hostDnsIps;
 
 #define C_OK "\033[32m"
 #define C_ERR "\033[31m"
@@ -204,7 +207,13 @@ void CLI::handleHelp(const vector<string> &)
             "  <host>   tcp_send <port> <msg>                   Kirim data TCP PSH|ACK\n"
             "  <host>   tcp_close <port>                        Initiate TCP teardown\n"
             "  <host>   http_server <port> [webroot]            Start HTTP server on port\n"
-            "  <host>   http_get <IP> <port> <path>             Send HTTP GET request\n"
+            "  <host>   http_get <url>                          HTTP GET (domain auto-resolved via set-dns)\n"
+            "  <host>   set-dns <IP>                            Set DNS server IP for this host\n"
+            "  <host>   dns_server start                        Start DNS server on host\n"
+            "  <host>   dns_server add <domain> <ip>            Add A record to DNS server\n"
+            "  <host>   dns_server records                      Show DNS records\n"
+            "  <host>   dns_server stop                         Stop DNS server\n"
+            "  <host>   dns_resolve <domain>                    Resolve domain (needs set-dns first)\n"
             "  <router> set-ip <port> <IP/CIDR>                 Set IP port router\n"
             "  <router> ip route <net> <hop> <port>             Tambah static route\n"
             "  <router> route                                   Tampilkan routing table\n"
@@ -331,6 +340,18 @@ bool CLI::processCommand(const string &line)
             else
             {
                 err("Hanya host yang mendukung set-gw.");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "set-dns")
+        {
+            if (host)
+            {
+                g_hostDnsIps[host->getName()] = args[2];
+                ok("DNS server untuk " + host->getName() + " diset ke " + args[2]);
+            }
+            else
+            {
+                err("Hanya host yang mendukung set-dns.");
             }
         }
         else if (args.size() >= 6 && args[1] == "ip" && args[2] == "route")
@@ -512,11 +533,9 @@ bool CLI::processCommand(const string &line)
             }
             string url = args[2];
 
-            // Parse url jadi ip/domain dan path
             string urlHost, urlPath;
-            // hapus http:// kalau ada
             string s = url;
-            if (s.substr(0, 7) == "http://")
+            if (s.size() >= 7 && s.substr(0, 7) == "http://")
                 s = s.substr(7);
             size_t slashPos = s.find('/');
             if (slashPos == string::npos)
@@ -530,7 +549,34 @@ bool CLI::processCommand(const string &line)
                 urlPath = s.substr(slashPos);
             }
 
-            host->httpGet(urlHost, 80, urlPath);
+            bool isIp = true;
+            for (char c : urlHost)
+                if (!isdigit(c) && c != '.') { isIp = false; break; }
+
+            if (!isIp)
+            {
+                auto dnsIt = g_hostDnsIps.find(host->getName());
+                if (dnsIt == g_hostDnsIps.end() || dnsIt->second.empty())
+                {
+                    err("URL berisi domain tapi DNS belum diset. Gunakan: "
+                        + host->getName() + " set-dns <ip>");
+                    return true;
+                }
+                DNSClient dnsClient(host);
+                string resolved = dnsClient.resolve(dnsIt->second, urlHost);
+                if (resolved.empty())
+                {
+                    err("DNS resolve gagal untuk: " + urlHost);
+                    return true;
+                }
+                info("DNS: " + urlHost + " -> " + resolved);
+                urlHost = resolved;
+            }
+
+            // host->httpGet(urlHost, 80, urlPath);
+            HTTPClient client(host); 
+            string dnsServerIp = (args.size() >= 4) ? args[3] : ""; 
+            string result = client.get(url, dnsServerIp); 
         }
         // ── DHCP SERVER ──────────────────────────────────────────────────
         // Format: <host> dhcp_server start [poolStart] [poolEnd] [gw] [prefix]
@@ -596,6 +642,86 @@ bool CLI::processCommand(const string &line)
             {
                 err("DHCP discover gagal — tidak ada response dari server.");
             }
+        }
+        else if (args.size() >= 2 && args[1] == "dns_server")
+        {
+            if (!host)
+            {
+                err("dns_server hanya untuk host.");
+                return true;
+            }
+            if (args.size() >= 3 && args[2] == "start")
+            {
+                if (g_dnsServers.count(host->getName()))
+                {
+                    info(host->getName() + " sudah ada DNS server.");
+                }
+                else
+                {
+                    DNSServer *srv = new DNSServer(host);
+                    srv->start();
+                    g_dnsServers[host->getName()] = srv;
+                    ok("DNS server berjalan di " + host->getName());
+                }
+            }
+            else if (args.size() >= 5 && args[2] == "add")
+            {
+                if (!g_dnsServers.count(host->getName()))
+                {
+                    err("DNS server belum distart di " + host->getName() + ". Jalankan dns_server start dulu.");
+                    return true;
+                }
+                g_dnsServers[host->getName()]->addRecord(args[3], args[4]);
+                ok("DNS record: " + args[3] + " -> " + args[4]);
+            }
+            else if (args.size() >= 3 && args[2] == "records")
+            {
+                if (!g_dnsServers.count(host->getName()))
+                {
+                    err("Tidak ada DNS server di " + host->getName());
+                    return true;
+                }
+                g_dnsServers[host->getName()]->printRecords();
+            }
+            else if (args.size() >= 3 && args[2] == "stop")
+            {
+                if (g_dnsServers.count(host->getName()))
+                {
+                    delete g_dnsServers[host->getName()];
+                    g_dnsServers.erase(host->getName());
+                    ok("DNS server di " + host->getName() + " dihentikan.");
+                }
+                else
+                {
+                    err("Tidak ada DNS server di " + host->getName());
+                }
+            }
+            else
+            {
+                err("Penggunaan:");
+                err("  <host> dns_server start");
+                err("  <host> dns_server add <domain> <ip>");
+                err("  <host> dns_server records");
+                err("  <host> dns_server stop");
+            }
+        }
+        else if (args.size() >= 3 && args[1] == "dns_resolve")
+        {
+            if (!host)
+            {
+                err("dns_resolve hanya untuk host.");
+                return true;
+            }
+            auto dnsIt = g_hostDnsIps.find(host->getName());
+            if (dnsIt == g_hostDnsIps.end() || dnsIt->second.empty())
+            {
+                err("DNS server belum diset. Gunakan: " + host->getName() + " set-dns <ip>");
+                return true;
+            }
+            DNSClient dnsClient(host);
+            string resolved = dnsClient.resolve(dnsIt->second, args[2]);
+            if (!resolved.empty())
+                ok("Resolve: " + args[2] + " -> " + resolved);
         }
         else if (args.size() >= 3 && args[1] == "acl")
         {
