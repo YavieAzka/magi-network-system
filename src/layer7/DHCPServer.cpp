@@ -58,8 +58,8 @@ void DHCPServer::start() {
     socket_->bind("0.0.0.0", DHCP_SERVER_PORT);
 
     // Daftarkan callback agar setiap data masuk langsung diproses
-    socket_->setOnReceive([this](const std::vector<uint8_t>& data) {
-        this->handleIncoming("0.0.0.0", data);
+    socket_->setOnReceive([this](const std::string& srcIp, const std::vector<uint8_t>& data) {
+        this->handleIncoming(srcIp, data);
     });
 
     std::cout << "[DHCPServer] Siap menerima request di port "

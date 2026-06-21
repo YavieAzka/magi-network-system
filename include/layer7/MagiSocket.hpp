@@ -41,7 +41,7 @@ private:
                uint16_t           remotePort,
                TCPSocket*         existingSocket);
 
-    std::function<void(const std::vector<uint8_t>&)> onReceive_;
+    std::function<void(const std::string&, const std::vector<uint8_t>&)> onReceive_;
 public:
     explicit MagiSocket(Host* host,
                         int   sock_type,
@@ -70,8 +70,8 @@ public:
     std::string getRemoteIp()   const { return remoteIp_; }
     uint16_t getRemotePort() const { return remotePort_; }
     TCPSocket* getTcpSocket() const { return tcpSocket_; }
-    void pushUdpData(const std::vector<uint8_t>& data);
-    void setOnReceive(std::function<void(const std::vector<uint8_t>&)> cb) {
+    void pushUdpData(const std::string& srcIp, const std::vector<uint8_t>& data);
+    void setOnReceive(std::function<void(const std::string&, const std::vector<uint8_t>&)> cb) {
         onReceive_ = cb;
     }
 };
