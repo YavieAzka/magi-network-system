@@ -36,8 +36,8 @@ void DNSServer::start()
     socket_->bind(host_->getIpAddress(), DNS_SERVER_PORT);
 
     // Daftarkan callback agar setiap data UDP masuk langsung diproses
-    socket_->setOnReceive([this](const std::vector<uint8_t> &data)
-                          { this->handleIncoming("0.0.0.0", data); });
+    socket_->setOnReceive([this](const std::string &srcIp, const std::vector<uint8_t> &data)
+                          { this->handleIncoming(srcIp, data); });
 
     std::cout << "[DNSServer:" << host_->getName() << "] "
               << "DNS Server aktif di " << host_->getIpAddress()
@@ -117,7 +117,7 @@ void DNSServer::sendResponse(const DNSMessage &response,
 
     // Broadcast response — dalam simulator single-threaded, client yang
     // punya socket di dstPort akan menerima ini. Pola sama dengan DHCPServer.
-    host_->sendUDPBroadcast(DNS_SERVER_PORT, dstPort, payload);
+    host_->sendUDP(dstIp, DNS_SERVER_PORT, dstPort, payload);
 
     std::cout << "[DNSServer:" << host_->getName() << "] "
               << "DNS response dikirim ke " << dstIp << ":" << dstPort
